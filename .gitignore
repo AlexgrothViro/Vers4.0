@@ -1,0 +1,8 @@
+# Artefatos gerados (não versionar)
+blastdb/
+bowtie2/
+data/ref/
+data/ptv_db.fa
+
+# Arquivo/lixo acidental com "q1"
+*q1*
