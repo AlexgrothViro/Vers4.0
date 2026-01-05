@@ -18,3 +18,8 @@ __pycache__/
 data/ref/
 data/*.fa
 amostra/
+# config local (não versionar)
+config.env
+
+# bancos gerados
+data/db/
