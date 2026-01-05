@@ -1,6 +1,31 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+usage() {
+  echo "Uso: $0 [--install]" >&2
+  echo "  --install    tenta instalar dependências obrigatórias via apt-get" >&2
+}
+
+AUTO_INSTALL=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --install)
+      AUTO_INSTALL=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage
+      exit 1
+      ;;
+  esac
+done
+
 # Programas obrigatórios para os testes básicos
 REQUIRED_CMDS=(
   velveth
@@ -71,6 +96,17 @@ fi
 
 if [[ $MISSING -ne 0 ]]; then
   echo
+  if [[ $AUTO_INSTALL -eq 1 ]]; then
+    echo "[AÇÃO] Instalando dependências faltantes via ${SCRIPT_DIR}/99_install_deps.sh"
+    if "${SCRIPT_DIR}/99_install_deps.sh"; then
+      echo
+      echo "[INFO] Reavaliando ambiente após instalação..."
+      exec "$0"
+    else
+      echo "Falha na instalação automática. Confira os logs acima." >&2
+      exit 1
+    fi
+  fi
   echo "Alguns programas estão faltando. Veja a seção 'Ambiente e requisitos' no README.md." >&2
   exit 1
 fi

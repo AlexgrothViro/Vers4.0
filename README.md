@@ -40,3 +40,16 @@ quali-2025/
     ├── 10_build_ptv_db.sh       # baixa sequências de Teschovirus A (NCBI) e gera banco BLAST
     └── 11_download_sus_scrofa.sh# baixa o genoma do hospedeiro (Sus scrofa) via NCBI/EDirect
 
+---
+
+## 2. Instalando dependências automaticamente
+
+Se estiver em um ambiente Debian/Ubuntu (inclui WSL), basta rodar:
+
+```bash
+make deps
+```
+
+Esse alvo usa `apt-get` para instalar Velvet, BLAST+ e Bowtie2 (e tenta instalar utilitários EDirect como opcional), e depois revalida o ambiente com `scripts/00_check_env.sh`. Caso `apt-get` não esteja disponível, o script aborta e mantém as mensagens de requisitos para instalação manual.
+
+> Dica: se a instalação falhar por restrições de rede/proxy, ajuste o proxy de `apt-get` conforme o ambiente antes de rodar `make deps`.
