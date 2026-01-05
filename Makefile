@@ -14,7 +14,7 @@ REF_FASTA     ?= $(REF_DIR)/ptv_db.fa
 BLAST_DB      ?= blastdb/ptv
 BOWTIE2_INDEX ?= bowtie2/ptv
 
-.PHONY: help setup_dirs test-env filter-host test-velvet test-blast \
+.PHONY: help setup_dirs deps test-env filter-host test-velvet test-blast \
 	ptv-fasta ptv-fasta-legacy blastdb bowtie2-index test clean
 
 -include config.env
@@ -34,6 +34,7 @@ cfg-blast:
 
 help:
 	@echo "Alvos disponíveis:"
+	@echo "  make deps                  # instala dependências (apt-get) e roda check de ambiente"
 	@echo "  make setup_dirs             # cria estrutura básica (data/, results/, docs/)"
 	@echo "  make ptv-fasta              # baixa/gera FASTA de PTV em $(REF_FASTA)"
 	@echo "  make ptv-fasta-legacy       # cria symlink data/ptv_db.fa -> $(REF_FASTA)"
@@ -53,6 +54,9 @@ help:
 setup_dirs:
 	mkdir -p data/raw data/cleaned data/host_removed data/assemblies
 	mkdir -p $(REF_DIR) results/qc results/blast results/phylogeny results/reports docs
+
+deps:
+	$(SCRIPTS_DIR)/00_check_env.sh --install
 
 test-env:
 	$(SCRIPTS_DIR)/00_check_env.sh
