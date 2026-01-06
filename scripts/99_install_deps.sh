@@ -4,13 +4,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 REQUIRED_PACKAGES=(
-  velvet             # fornece velveth/velvetg
-  ncbi-blast+        # fornece blastn/makeblastdb
-  bowtie2            # fornece bowtie2/bowtie2-build
+  build-essential     # fornece gcc/make para compilações auxiliares
+  dos2unix            # normalização de finais de linha
+  velvet              # fornece velveth/velvetg
+  ncbi-blast+         # fornece blastn/makeblastdb
+  bowtie2             # fornece bowtie2/bowtie2-build
+  mafft               # alinhador para filogenia
+  fasttree            # construção de árvores rápidas
+  ncbi-entrez-direct  # fornece esearch/efetch
 )
 
 OPTIONAL_PACKAGES=(
-  edirect            # utilitários esearch/efetch para downloads NCBI
 )
 
 APT_GET_BIN="$(command -v apt-get || true)"
@@ -47,6 +51,22 @@ install_packages() {
 }
 
 install_packages "dependências obrigatórias" "${REQUIRED_PACKAGES[@]}"
+
+install_iqtree() {
+  echo "[INFO] Instalando iqtree (fallback para iqtree2 se necessário)..."
+  DEBIAN_FRONTEND=noninteractive ${SUDO} "${APT_GET_BIN}" update -y
+  if DEBIAN_FRONTEND=noninteractive ${SUDO} "${APT_GET_BIN}" install -y iqtree; then
+    return 0
+  fi
+  echo "[AVISO] pacote iqtree indisponível; tentando iqtree2..."
+  if DEBIAN_FRONTEND=noninteractive ${SUDO} "${APT_GET_BIN}" install -y iqtree2; then
+    return 0
+  fi
+  echo "ERRO: falha ao instalar iqtree ou iqtree2. Instale manualmente e reexecute scripts/00_check_env.sh." >&2
+  exit 1
+}
+
+install_iqtree
 
 # Não falha se opcionais não existirem; são úteis para downloads.
 set +e

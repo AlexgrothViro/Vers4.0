@@ -28,6 +28,8 @@ done
 
 # Programas obrigatórios para os testes básicos
 REQUIRED_CMDS=(
+  gcc
+  make
   velveth
   velvetg
   blastn
@@ -35,10 +37,17 @@ REQUIRED_CMDS=(
   bowtie2
   bowtie2-build
   python3
+  dos2unix
+  mafft
+  fasttree
+  esearch
+  efetch
 )
 
-# Programas opcionais (úteis para download via NCBI/HTTP)
-OPTIONAL_CMDS=(esearch efetch curl)
+IQTREE_CANDIDATES=(iqtree iqtree2)
+
+# Programas opcionais (úteis para download via HTTP)
+OPTIONAL_CMDS=(curl)
 
 echo "== Verificando programas necessários no PATH =="
 
@@ -52,6 +61,20 @@ for cmd in "${REQUIRED_CMDS[@]}"; do
     MISSING=1
   fi
 done
+
+IQTREE_FOUND=0
+for cmd in "${IQTREE_CANDIDATES[@]}"; do
+  if command -v "$cmd" >/dev/null 2>&1; then
+    path=$(command -v "$cmd")
+    printf "  [OK] %s encontrado em %s (iqtree/iqtree2)\n" "$cmd" "$path"
+    IQTREE_FOUND=1
+    break
+  fi
+done
+if [[ $IQTREE_FOUND -eq 0 ]]; then
+  echo "  [FALTA] iqtree ou iqtree2 não encontrado no PATH"
+  MISSING=1
+fi
 
 for cmd in "${OPTIONAL_CMDS[@]}"; do
   if command -v "$cmd" >/dev/null 2>&1; then

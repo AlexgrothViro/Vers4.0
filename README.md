@@ -50,6 +50,17 @@ Se estiver em um ambiente Debian/Ubuntu (inclui WSL), basta rodar:
 make deps
 ```
 
-Esse alvo usa `apt-get` para instalar Velvet, BLAST+ e Bowtie2 (e tenta instalar utilitários EDirect como opcional), e depois revalida o ambiente com `scripts/00_check_env.sh`. Caso `apt-get` não esteja disponível, o script aborta e mantém as mensagens de requisitos para instalação manual.
+Esse alvo usa `apt-get` para instalar os requisitos do pipeline (build-essential, Velvet, BLAST+, Bowtie2, MAFFT, FastTree, IQ-TREE/IQ-TREE2, dos2unix e EDirect via `ncbi-entrez-direct`), e depois revalida o ambiente com `scripts/00_check_env.sh`. Caso `apt-get` não esteja disponível, o script aborta e mantém as mensagens de requisitos para instalação manual.
 
 > Dica: se a instalação falhar por restrições de rede/proxy, ajuste o proxy de `apt-get` conforme o ambiente antes de rodar `make deps`.
+
+## 3. WSL/Windows (CRLF)
+
+Ambientes Windows/WSL podem clonar o repositório com finais de linha em CRLF ou perder o bit de execução dos scripts. Para evitar erros do tipo `^M` ou `Permission denied`, execute antes de rodar o pipeline:
+
+```bash
+make fix-wsl
+./scripts/00_check_env.sh --install
+```
+
+O alvo `fix-wsl` normaliza os arquivos rastreados para LF e restaura permissões de execução nos scripts. Em seguida, `00_check_env.sh --install` garante que as dependências (incluindo ferramentas de filogenia) estejam disponíveis. Depois disso, siga o fluxo normal (`make ptv-fasta`, `make blastdb`, etc.).
