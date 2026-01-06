@@ -15,7 +15,7 @@ BLAST_DB      ?= blastdb/ptv
 BOWTIE2_INDEX ?= bowtie2/ptv
 
 .PHONY: help setup_dirs deps test-env filter-host test-velvet test-blast \
-	ptv-fasta ptv-fasta-legacy blastdb bowtie2-index test clean
+	ptv-fasta ptv-fasta-legacy blastdb bowtie2-index test clean fix-wsl
 
 -include config.env
 
@@ -57,6 +57,9 @@ setup_dirs:
 
 deps:
 	$(SCRIPTS_DIR)/00_check_env.sh --install
+
+fix-wsl:
+	bash scripts/00_fix_wsl.sh
 
 test-env:
 	$(SCRIPTS_DIR)/00_check_env.sh
