@@ -89,7 +89,7 @@ def main():
         for c, fid, seq in frags_used:
             out.write(f">{fid}\n{wrap_seq(seq)}\n")
 
-  # Coverage por referência (usando somente frags_used)
+    # Coverage por referência (usando somente frags_used)
     cov_tsv = outdir / "coverage_by_ref.tsv"
     cov_int = outdir / "coverage_intervals_by_ref.tsv"
 
@@ -123,7 +123,7 @@ def main():
             for s, e in merged:
                 out2.write(f"{rid}\t{s}\t{e}\t{e - s + 1}\n")
 
- # Resumo
+    # Resumo
     used_counts = sorted([c for c, _, _ in frags_used])
     if used_counts:
         mn = used_counts[0]
