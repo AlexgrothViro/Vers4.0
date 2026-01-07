@@ -1,15 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+if [[ -f "${REPO_ROOT}/config.env" ]]; then
+  source "${REPO_ROOT}/config.env"
+fi
+
+source "${SCRIPT_DIR}/lib/common.sh"
+
 ALN_FA="run_T1/work/ptv_fragments_plus_ref.aln.fa"
 PREFIX="run_T1/work/ptv_fragments_plus_ref.iqtree"
 
 echo "=== Árvore PTV com IQ-TREE ==="
 
-if [[ ! -s "$ALN_FA" ]]; then
-  echo "ERRO: Alinhamento não encontrado ou vazio: $ALN_FA" >&2
-  exit 1
-fi
+check_file "$ALN_FA"
 
 IQBIN=""
 
@@ -18,14 +24,10 @@ if command -v iqtree2 >/dev/null 2>&1; then
 elif command -v iqtree >/dev/null 2>&1; then
   IQBIN="iqtree"
 else
-  echo "ERRO: IQ-TREE não encontrado (nem 'iqtree2' nem 'iqtree' no PATH)." >&2
-  echo "Instale, por exemplo, com (Ubuntu):" >&2
-  echo "  sudo apt update && sudo apt install iqtree" >&2
-  echo "ou baixe o binário oficial em iqtree.org e coloque no PATH." >&2
-  exit 1
+  log_error "IQ-TREE não encontrado (nem 'iqtree2' nem 'iqtree' no PATH). Instale, por exemplo, com: sudo apt update && sudo apt install iqtree"
 fi
 
-echo "[INFO] Usando binário: $IQBIN"
+log_info "Usando binário: $IQBIN"
 
 "$IQBIN" -s "$ALN_FA" \
   -m GTR+G \
@@ -35,7 +37,7 @@ echo "[INFO] Usando binário: $IQBIN"
   -pre "$PREFIX"
 
 echo
-echo "[OK] IQ-TREE finalizado."
+log_info "IQ-TREE finalizado."
 echo "Arquivos principais em:"
 echo "  ${PREFIX}.treefile  (árvore principal)"
 echo "  ${PREFIX}.log       (log da análise)"

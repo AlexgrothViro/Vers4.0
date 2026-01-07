@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+if [[ -f "${REPO_ROOT}/config.env" ]]; then
+  source "${REPO_ROOT}/config.env"
+fi
+
+source "${SCRIPT_DIR}/lib/common.sh"
+
 DEST_DIR="ref/host"
 FA="${DEST_DIR}/sus_scrofa.fa"
 
@@ -19,14 +28,13 @@ echo
 
 mkdir -p "$DEST_DIR"
 
-echo "[$(date)] Buscando sequências no NCBI..."
+log_info "Buscando sequências no NCBI..."
 esearch -db nucleotide -query "$QUERY" | efetch -format fasta > "$FA"
 
 if [[ ! -s "$FA" ]]; then
-  echo "ERRO: arquivo FASTA ${FA} está vazio. Verifique a query ou sua conexão." >&2
-  exit 1
+  log_error "arquivo FASTA ${FA} está vazio. Verifique a query ou sua conexão."
 fi
 
-echo "[$(date)] Genoma de Sus scrofa salvo em: ${FA}"
+log_info "Genoma de Sus scrofa salvo em: ${FA}"
 echo "Pré-visualização das primeiras linhas:"
 head -n 5 "$FA" || true

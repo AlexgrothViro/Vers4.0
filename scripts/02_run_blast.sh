@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+if [[ -f "${REPO_ROOT}/config.env" ]]; then
+  source "${REPO_ROOT}/config.env"
+fi
+
+source "${SCRIPT_DIR}/lib/common.sh"
+
 SAMPLE="${1:?SAMPLE obrigatório}"
 KMER="${2:?KMER obrigatório}"
 
@@ -13,12 +22,10 @@ OUT="${OUTDIR}/${SAMPLE}_k${KMER}_vs_db.tsv"
 
 mkdir -p "$OUTDIR"
 
-if [[ ! -s "$CONTIGS" ]]; then
-  echo "[ERRO] contigs.fa não encontrado: $CONTIGS" >&2
-  exit 1
-fi
+check_file "$CONTIGS"
+check_file "${DB}.nhr"
 
-echo "[$(date)] Rodando blastn contra $DB..."
+log_info "Rodando blastn contra $DB..."
 blastn -query "$CONTIGS" -db "$DB" \
   -outfmt '6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore' \
   -max_target_seqs 5 -evalue 1e-5 -num_threads "$THREADS" > "$OUT"
@@ -26,4 +33,4 @@ blastn -query "$CONTIGS" -db "$DB" \
 # compat legado (alguns scripts antigos podem ler o nome sem kmer)
 ln -sf "$(basename "$OUT")" "${OUTDIR}/${SAMPLE}_vs_db.tsv"
 
-echo "[$(date)] Resultado salvo em: $OUT"
+log_info "Resultado salvo em: $OUT"

@@ -1,15 +1,22 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ ! -f config.env ]]; then
-  echo "[ERRO] config.env não existe. Crie com: cp config.env.example config.env"
-  exit 1
-fi
-source config.env
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
-command -v esearch >/dev/null 2>&1 || { echo "[ERRO] EDirect não encontrado (esearch). Instale EDirect."; exit 1; }
-command -v efetch  >/dev/null 2>&1 || { echo "[ERRO] EDirect não encontrado (efetch). Instale EDirect."; exit 1; }
-command -v makeblastdb >/dev/null 2>&1 || { echo "[ERRO] makeblastdb não encontrado (blast+)."; exit 1; }
+if [[ -f "${REPO_ROOT}/config.env" ]]; then
+  source "${REPO_ROOT}/config.env"
+fi
+
+source "${SCRIPT_DIR}/lib/common.sh"
+
+if [[ ! -f "${REPO_ROOT}/config.env" ]]; then
+  log_error "config.env não existe. Crie com: cp config.env.example config.env"
+fi
+
+command -v esearch >/dev/null 2>&1 || log_error "EDirect não encontrado (esearch). Instale EDirect."
+command -v efetch  >/dev/null 2>&1 || log_error "EDirect não encontrado (efetch). Instale EDirect."
+command -v makeblastdb >/dev/null 2>&1 || log_error "makeblastdb não encontrado (blast+)."
 
 DB_DIR="${DB_ROOT:-data/db}/${DB_NAME}"
 FASTA="${DB_DIR}/${DB_NAME}.fasta"
@@ -20,15 +27,15 @@ mkdir -p "$DB_DIR"
 QUERY="${NCBI_QUERY:-txid${TARGET_TAXID}[Organism:exp] AND refseq[filter]}"
 RETMAX="${EDIRECT_RETMAX:-500}"
 
-echo "[DB] Query: $QUERY"
-echo "[DB] retmax: $RETMAX"
-echo "[DB] Baixando FASTA..."
+log_info "[DB] Query: $QUERY"
+log_info "[DB] retmax: $RETMAX"
+log_info "[DB] Baixando FASTA..."
 
 esearch -db nucleotide -query "$QUERY" -retmax "$RETMAX" | \
   efetch -format fasta > "$FASTA"
 
-echo "[DB] Sequências baixadas: $(grep -c '^>' "$FASTA" || true)"
-echo "[DB] Construindo BLAST DB..."
+log_info "[DB] Sequências baixadas: $(grep -c '^>' "$FASTA" || true)"
+log_info "[DB] Construindo BLAST DB..."
 makeblastdb -in "$FASTA" -dbtype nucl -out "$BLASTDB" -parse_seqids
 
-echo "[DB] OK: $BLASTDB"
+log_info "[DB] OK: $BLASTDB"

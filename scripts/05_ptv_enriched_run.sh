@@ -1,5 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+if [[ -f "${REPO_ROOT}/config.env" ]]; then
+  source "${REPO_ROOT}/config.env"
+fi
+
+source "${SCRIPT_DIR}/lib/common.sh"
 SAMPLE_IN="${1:?SAMPLE obrigatório}"
 KMER="${2:?KMER obrigatório}"
 
@@ -20,12 +29,8 @@ RAW2="data/raw/${BASE}_R2.fastq.gz"
 
 mkdir -p data/ptv_enriched results/qc results/phylogeny
 
-if [[ ! -s "$RAW1" || ! -s "$RAW2" ]]; then
-  echo "[ERRO] FASTQ raw não encontrados:"
-  echo "  $RAW1"
-  echo "  $RAW2"
-  exit 1
-fi
+check_file "$RAW1"
+check_file "$RAW2"
 
 # 1) Bowtie2 enrichment
 PREFIX="data/ptv_enriched/${BASE}_ptv.fastq.gz"
@@ -35,7 +40,7 @@ LOG="results/qc/${BASE}_ptv_map.log"
 
 rm -f "$ENR1" "$ENR2" "$LOG" 2>/dev/null || true
 
-echo "[$(date)] Bowtie2 enrich (index=$BOWTIE2_INDEX) ..."
+log_info "Bowtie2 enrich (index=$BOWTIE2_INDEX) ..."
 bowtie2 -x "$BOWTIE2_INDEX" \
   -1 "$RAW1" -2 "$RAW2" \
   --very-sensitive-local \
@@ -47,26 +52,26 @@ ln -sf "../ptv_enriched/${BASE}_ptv.fastq.1.gz" "data/raw/${PTV_SAMPLE}_R1.fastq
 ln -sf "../ptv_enriched/${BASE}_ptv.fastq.2.gz" "data/raw/${PTV_SAMPLE}_R2.fastq.gz"
 
 # 3) Velvet
-echo "[$(date)] Velvet (sample=$PTV_SAMPLE k=$KMER) ..."
+log_info "Velvet (sample=$PTV_SAMPLE k=$KMER) ..."
 ./scripts/01_run_velvet.sh "$PTV_SAMPLE" "$KMER"
 
 # 4) BLAST (por kmer)
-echo "[$(date)] BLAST (sample=$PTV_SAMPLE k=$KMER db=$BLAST_DB_PATH) ..."
+log_info "BLAST (sample=$PTV_SAMPLE k=$KMER db=$BLAST_DB_PATH) ..."
 BLAST_DB="$BLAST_DB_PATH" ./scripts/02_run_blast.sh "$PTV_SAMPLE" "$KMER"
 
 # 5) Extract hits
-echo "[$(date)] Extract hits ..."
+log_info "Extract hits ..."
 python3 scripts/04_extract_hits.py --sample "$PTV_SAMPLE" --kmer "$KMER"
 
 OUT="results/phylogeny/${PTV_SAMPLE}_k${KMER}"
 
 # 6) MAFFT (refs + addfragments)
-command -v mafft >/dev/null || { echo "[ERRO] mafft não instalado: sudo apt-get install -y mafft"; exit 1; }
+command -v mafft >/dev/null || log_error "mafft não instalado: sudo apt-get install -y mafft"
 
-echo "[$(date)] MAFFT refs ..."
+log_info "MAFFT refs ..."
 mafft --auto "$OUT/refs.fa" > "$OUT/refs.aln.fa"
 
-echo "[$(date)] MAFFT addfragments ..."
+log_info "MAFFT addfragments ..."
 mafft --addfragments "$OUT/hits.fa" --keeplength "$OUT/refs.aln.fa" > "$OUT/ptv_fragments.aln.fa"
 
 # 7) Report (curto e objetivo)
@@ -124,7 +129,7 @@ echo
 
 # ---- optional: stop after alignment (no postprocess / no tree) ----
 if [ "${STOP_AFTER_ALIGN:-0}" -eq 1 ]; then
-  echo "[$(date)] STOP_AFTER_ALIGN=1: parando após MAFFT (sem postprocess/árvore)."
+  log_info "STOP_AFTER_ALIGN=1: parando após MAFFT (sem postprocess/árvore)."
   # Evita confusão com outputs antigos de árvore/cobertura no mesmo OUTDIR
   mkdir -p "$OUT/_old_tree"
   for f in "$OUT"/ptv_fasttree*.nwk "$OUT"/tree_input*.aln.fa "$OUT"/coverage_*.tsv; do
@@ -172,6 +177,6 @@ else
 fi
 
 
-echo "[$(date)] OK: pipeline PTV-enriched concluído."
+log_info "OK: pipeline PTV-enriched concluído."
 echo "Report: $REPORT"
 tail -n 80 "$REPORT"

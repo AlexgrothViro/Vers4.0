@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+if [[ -f "${REPO_ROOT}/config.env" ]]; then
+  source "${REPO_ROOT}/config.env"
+fi
+
+source "${SCRIPT_DIR}/lib/common.sh"
+
 if [[ $# -lt 1 ]]; then
-  echo "Uso: $0 NOME_AMOSTRA [KMER]" >&2
-  echo "Exemplo: $0 exemplo 31" >&2
-  exit 1
+  log_error "Uso: $0 NOME_AMOSTRA [KMER]"
 fi
 
 SAMPLE="$1"
@@ -17,28 +24,20 @@ R1="${RAW_DIR}/${SAMPLE}_R1.fastq.gz"
 R2="${RAW_DIR}/${SAMPLE}_R2.fastq.gz"
 OUTDIR="${ASSEMBLY_DIR}/${SAMPLE}_velvet_k${KMER}"
 
-if [[ ! -f "$R1" || ! -f "$R2" ]]; then
-  echo "ERRO: FASTQ de entrada não encontrados:" >&2
-  echo "  $R1" >&2
-  echo "  $R2" >&2
-  echo "Coloque os arquivos de teste em data/raw/ com esse padrão de nome." >&2
-  exit 1
-fi
+check_file "$R1"
+check_file "$R2"
 
 mkdir -p "$OUTDIR"
 
-echo "[$(date)] Rodando velveth (k=${KMER})..."
+log_info "Rodando velveth (k=${KMER})..."
 velveth "$OUTDIR" "$KMER" -shortPaired -fastq.gz -separate "$R1" "$R2"
 
-echo "[$(date)] Rodando velvetg..."
-velvetg "$OUTDIR" -exp_cov auto -cov_cutoff auto
+log_info "Rodando velvetg..."
+EXTRA_OPTS="${3:-${VELVET_OPTS:-}}"
+velvetg "$OUTDIR" -exp_cov auto -cov_cutoff auto $EXTRA_OPTS
 
 if [[ -f "${OUTDIR}/contigs.fa" ]]; then
-  echo "[$(date)] OK: contigs gerados em ${OUTDIR}/contigs.fa"
+  log_info "OK: contigs gerados em ${OUTDIR}/contigs.fa"
 else
-  echo "[$(date)] ATENÇÃO: contigs.fa não encontrado em ${OUTDIR}" >&2
-EXTRA_OPTS="${3:-${VELVET_OPTS:-}}"    
-# ...
-velvetg "$OUTDIR" $EXTRA_OPTS
-  exit 1
+  log_error "ATENÇÃO: contigs.fa não encontrado em ${OUTDIR}"
 fi

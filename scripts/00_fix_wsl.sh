@@ -4,6 +4,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel)"
 
+if [[ -f "${REPO_ROOT}/config.env" ]]; then
+  source "${REPO_ROOT}/config.env"
+fi
+
+if [[ -f "${SCRIPT_DIR}/lib/common.sh" ]]; then
+  source "${SCRIPT_DIR}/lib/common.sh"
+fi
+
 cd "${REPO_ROOT}"
 
 if ! command -v dos2unix >/dev/null 2>&1; then

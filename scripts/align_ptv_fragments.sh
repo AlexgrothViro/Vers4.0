@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+if [[ -f "${REPO_ROOT}/config.env" ]]; then
+  source "${REPO_ROOT}/config.env"
+fi
+
+source "${SCRIPT_DIR}/lib/common.sh"
+
 # Arquivos de entrada/saída
 REF_FA="data/ptv_db.fa"
 FRAG_FA="run_T1/work/ptv_hits_fragments.fa"
@@ -10,26 +19,16 @@ ALN_FA="run_T1/work/ptv_fragments_plus_ref.aln.fa"
 echo "=== Alinhamento PTV: referências + fragmentos ==="
 
 # checagens básicas
-if [[ ! -s "$REF_FA" ]]; then
-  echo "ERRO: Arquivo de referência não encontrado ou vazio: $REF_FA" >&2
-  exit 1
-fi
+check_file "$REF_FA"
+check_file "$FRAG_FA"
 
-if [[ ! -s "$FRAG_FA" ]]; then
-  echo "ERRO: Arquivo de fragmentos não encontrado ou vazio: $FRAG_FA" >&2
-  exit 1
-fi
+command -v mafft >/dev/null 2>&1 || log_error "'mafft' não encontrado no PATH. Instale o MAFFT antes de rodar este script."
 
-if ! command -v mafft >/dev/null 2>&1; then
-  echo "ERRO: 'mafft' não encontrado no PATH. Instale o MAFFT antes de rodar este script." >&2
-  exit 1
-fi
-
-echo "[1/2] Concatenando referências e fragmentos em: $MERGED_FA"
+log_info "[1/2] Concatenando referências e fragmentos em: $MERGED_FA"
 cat "$REF_FA" "$FRAG_FA" > "$MERGED_FA"
 
-echo "[2/2] Rodando MAFFT (modo automático)..."
+log_info "[2/2] Rodando MAFFT (modo automático)..."
 mafft --auto "$MERGED_FA" > "$ALN_FA"
 
 echo
-echo "[OK] Alinhamento pronto em: $ALN_FA"
+log_info "[OK] Alinhamento pronto em: $ALN_FA"

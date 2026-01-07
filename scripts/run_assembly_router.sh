@@ -1,25 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Carrega config
-if [[ ! -f config.env ]]; then
-  echo "[ERRO] config.env não existe. Crie com: cp config.env.example config.env"
-  exit 1
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+if [[ -f "${REPO_ROOT}/config.env" ]]; then
+  source "${REPO_ROOT}/config.env"
 fi
-source config.env
+
+source "${SCRIPT_DIR}/lib/common.sh"
+
+if [[ ! -f "${REPO_ROOT}/config.env" ]]; then
+  log_error "config.env não existe. Crie com: cp config.env.example config.env"
+fi
 
 RAW1="data/raw/${SAMPLE_NAME}_R1.fastq.gz"
 RAW2="data/raw/${SAMPLE_NAME}_R2.fastq.gz"
 
-if [[ ! -s "$RAW1" || ! -s "$RAW2" ]]; then
-  echo "[ERRO] FASTQ não encontrados:"
-  echo "  $RAW1"
-  echo "  $RAW2"
-  exit 1
-fi
+check_file "$RAW1"
+check_file "$RAW2"
 
-echo "[PIPELINE] Sample: $SAMPLE_NAME"
-echo "[PIPELINE] Assembler: $ASSEMBLER"
+log_info "[PIPELINE] Sample: $SAMPLE_NAME"
+log_info "[PIPELINE] Assembler: $ASSEMBLER"
 
 # Diretório padrão “estável” para o BLAST genérico
 STD_ASM_DIR="data/assemblies/${SAMPLE_NAME}_assembly"
@@ -35,8 +37,7 @@ elif [[ "$ASSEMBLER" == "velvet" ]]; then
   ln -sf "../${SAMPLE_NAME}_velvet_k${VELVET_K}/contigs.fa" "$STD_ASM_DIR/contigs.fa"
 
 else
-  echo "[ERRO] ASSEMBLER='$ASSEMBLER' inválido. Use 'velvet' ou 'spades'."
-  exit 1
+  log_error "ASSEMBLER='$ASSEMBLER' inválido. Use 'velvet' ou 'spades'."
 fi
 
-echo "[PIPELINE] OK: contigs padronizados em: $STD_ASM_DIR/contigs.fa"
+log_info "[PIPELINE] OK: contigs padronizados em: $STD_ASM_DIR/contigs.fa"

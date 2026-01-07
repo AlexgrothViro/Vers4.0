@@ -2,6 +2,15 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+if [[ -f "${REPO_ROOT}/config.env" ]]; then
+  source "${REPO_ROOT}/config.env"
+fi
+
+if [[ -f "${SCRIPT_DIR}/lib/common.sh" ]]; then
+  source "${SCRIPT_DIR}/lib/common.sh"
+fi
 
 REQUIRED_PACKAGES=(
   build-essential     # fornece gcc/make para compilações auxiliares
