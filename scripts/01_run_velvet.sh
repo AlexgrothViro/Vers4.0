@@ -37,7 +37,7 @@ if [[ -f "${OUTDIR}/contigs.fa" ]]; then
   echo "[$(date)] OK: contigs gerados em ${OUTDIR}/contigs.fa"
 else
   echo "[$(date)] ATENÇÃO: contigs.fa não encontrado em ${OUTDIR}" >&2
-EXTRA_OPTS="${3:-${VELVET_OPTS:-}}"
+EXTRA_OPTS="${3:-${VELVET_OPTS:-}}"    
 # ...
 velvetg "$OUTDIR" $EXTRA_OPTS
   exit 1
