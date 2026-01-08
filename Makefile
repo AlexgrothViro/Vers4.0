@@ -15,7 +15,8 @@ BLAST_DB      ?= blastdb/ptv
 BOWTIE2_INDEX ?= bowtie2/ptv
 
 .PHONY: help setup_dirs deps test-env filter-host test-velvet test-blast \
-	ptv-fasta ptv-fasta-legacy blastdb bowtie2-index test clean fix-wsl
+	ptv-fasta ptv-fasta-legacy blastdb bowtie2-index test clean fix-wsl \
+	quickstart
 
 -include config.env
 
@@ -42,6 +43,7 @@ help:
 	@echo "  make bowtie2-index          # gera índice Bowtie2 em $(BOWTIE2_INDEX) (usa $(REF_FASTA))"
 	@echo "  make test-env               # verifica dependências básicas"
 	@echo "  make test                   # roda smoke test (prep + 90_smoke_test.sh)"
+	@echo "  make quickstart             # verifica deps, prepara bancos e roda pipeline PTV"
 	@echo "  make filter-host/test-velvet/test-blast # alvos individuais legados"
 	@echo "  make clean                  # remove artefatos gerados (blastdb, bowtie2, run_T1, logs/tmp/results)"
 	@echo
@@ -91,6 +93,9 @@ test-blast:
 test: test-env ptv-fasta-legacy blastdb bowtie2-index
 	BLAST_DB="$(BLAST_DB)" BOWTIE2_INDEX="$(BOWTIE2_INDEX)" \
 	$(SCRIPTS_DIR)/90_smoke_test.sh
+
+quickstart:
+	$(SCRIPTS_DIR)/12_quickstart.sh "$(SAMPLE)" "$(KMER_PTV)"
 
 clean:
 	rm -rf run_T1 blastdb bowtie2 results logs tmp

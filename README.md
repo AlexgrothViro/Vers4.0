@@ -64,3 +64,19 @@ make fix-wsl
 ```
 
 O alvo `fix-wsl` normaliza os arquivos rastreados para LF e restaura permissões de execução nos scripts. Em seguida, `00_check_env.sh --install` garante que as dependências (incluindo ferramentas de filogenia) estejam disponíveis. Depois disso, siga o fluxo normal (`make ptv-fasta`, `make blastdb`, etc.).
+
+## 4. Comando único (verificação + bancos + pipeline)
+
+Para quem quer um único comando que **verifica dependências, prepara bancos e roda o pipeline PTV enriquecido**, basta executar:
+
+```bash
+make quickstart
+```
+
+Parâmetros opcionais:
+
+```bash
+make quickstart SAMPLE=81554_S150 KMER_PTV=51
+```
+
+Esse alvo executa `scripts/12_quickstart.sh`, que faz o check do ambiente, prepara diretórios/bancos e roda `05_ptv_enriched_run.sh` em sequência.
