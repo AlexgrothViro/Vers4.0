@@ -26,6 +26,15 @@ Obs.: se existir config.env, ele será usado como base de configuração.
 USAGE
 }
 
+resolve_path() {
+  local path="$1"
+  if [[ "$path" == /* ]]; then
+    echo "$path"
+  else
+    echo "${REPO_ROOT}/${path}"
+  fi
+}
+
 AUTO_INSTALL=0
 SKIP_HOST_FILTER=0
 SAMPLE_OVERRIDE=""
@@ -64,7 +73,7 @@ SAMPLE_NAME="${SAMPLE_OVERRIDE:-${SAMPLE_NAME:-81554_S150}}"
 VELVET_K="${KMER_OVERRIDE:-${VELVET_K:-31}}"
 ASSEMBLER="${ASSEMBLER:-velvet}"
 THREADS="${THREADS:-4}"
-BLAST_DB="${BLAST_DB:-blastdb/ptv}"
+BLAST_DB="$(resolve_path "${BLAST_DB:-blastdb/ptv}")"
 
 log() {
   printf '\n== %s ==\n' "$1"

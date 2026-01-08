@@ -14,9 +14,11 @@ SAMPLE="${1:?SAMPLE obrigatório}"
 THREADS="${2:-4}"
 SPADES_PARAMS="${3:-}"
 
-RAW1="data/raw/${SAMPLE}_R1.fastq.gz"
-RAW2="data/raw/${SAMPLE}_R2.fastq.gz"
-OUTDIR="data/assemblies/${SAMPLE}_spades"
+RAW_DIR="$(resolve_path "${RAW_DIR:-data/raw}")"
+ASSEMBLY_DIR="$(resolve_path "${ASSEMBLY_DIR:-data/assemblies}")"
+RAW1="${RAW_DIR}/${SAMPLE}_R1.fastq.gz"
+RAW2="${RAW_DIR}/${SAMPLE}_R2.fastq.gz"
+OUTDIR="${ASSEMBLY_DIR}/${SAMPLE}_spades"
 
 command -v spades.py >/dev/null 2>&1 || log_error "spades.py não encontrado no PATH"
 

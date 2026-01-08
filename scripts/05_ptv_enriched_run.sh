@@ -12,8 +12,12 @@ source "${SCRIPT_DIR}/lib/common.sh"
 SAMPLE_IN="${1:?SAMPLE obrigatório}"
 KMER="${2:?KMER obrigatório}"
 
-BOWTIE2_INDEX="${BOWTIE2_INDEX:-bowtie2/ptv}"
-BLAST_DB_PATH="${BLAST_DB:-blastdb/ptv}"
+RAW_DIR="$(resolve_path "${RAW_DIR:-data/raw}")"
+ASSEMBLY_DIR="$(resolve_path "${ASSEMBLY_DIR:-data/assemblies}")"
+PTV_ENRICHED_DIR="$(resolve_path "${PTV_ENRICHED_DIR:-data/ptv_enriched}")"
+RESULTS_DIR="$(resolve_path "${RESULTS_DIR:-results}")"
+BOWTIE2_INDEX="$(resolve_path "${BOWTIE2_INDEX:-bowtie2/ptv}")"
+BLAST_DB_PATH="$(resolve_path "${BLAST_DB:-blastdb/ptv}")"
 
 # aceita SAMPLE=XXXX_PTV ou SAMPLE=XXXX
 if [[ "$SAMPLE_IN" == *_PTV ]]; then
@@ -24,19 +28,19 @@ else
   PTV_SAMPLE="${SAMPLE_IN}_PTV"
 fi
 
-RAW1="data/raw/${BASE}_R1.fastq.gz"
-RAW2="data/raw/${BASE}_R2.fastq.gz"
+RAW1="${RAW_DIR}/${BASE}_R1.fastq.gz"
+RAW2="${RAW_DIR}/${BASE}_R2.fastq.gz"
 
-mkdir -p data/ptv_enriched results/qc results/phylogeny
+mkdir -p "$RAW_DIR" "$PTV_ENRICHED_DIR" "$RESULTS_DIR/qc" "$RESULTS_DIR/phylogeny"
 
 check_file "$RAW1"
 check_file "$RAW2"
 
 # 1) Bowtie2 enrichment
-PREFIX="data/ptv_enriched/${BASE}_ptv.fastq.gz"
-ENR1="data/ptv_enriched/${BASE}_ptv.fastq.1.gz"
-ENR2="data/ptv_enriched/${BASE}_ptv.fastq.2.gz"
-LOG="results/qc/${BASE}_ptv_map.log"
+PREFIX="${PTV_ENRICHED_DIR}/${BASE}_ptv.fastq.gz"
+ENR1="${PTV_ENRICHED_DIR}/${BASE}_ptv.fastq.1.gz"
+ENR2="${PTV_ENRICHED_DIR}/${BASE}_ptv.fastq.2.gz"
+LOG="${RESULTS_DIR}/qc/${BASE}_ptv_map.log"
 
 rm -f "$ENR1" "$ENR2" "$LOG" 2>/dev/null || true
 
@@ -47,23 +51,26 @@ bowtie2 -x "$BOWTIE2_INDEX" \
   --al-conc-gz "$PREFIX" \
   -S /dev/null 2> "$LOG"
 
-# 2) Symlinks para o padrão do pipeline (data/raw/<SAMPLE>_R1.fastq.gz)
-ln -sf "../ptv_enriched/${BASE}_ptv.fastq.1.gz" "data/raw/${PTV_SAMPLE}_R1.fastq.gz"
-ln -sf "../ptv_enriched/${BASE}_ptv.fastq.2.gz" "data/raw/${PTV_SAMPLE}_R2.fastq.gz"
+# 2) Symlinks para o padrão do pipeline (RAW_DIR/<SAMPLE>_R1.fastq.gz)
+ln -sf "${ENR1}" "${RAW_DIR}/${PTV_SAMPLE}_R1.fastq.gz"
+ln -sf "${ENR2}" "${RAW_DIR}/${PTV_SAMPLE}_R2.fastq.gz"
 
 # 3) Velvet
 log_info "Velvet (sample=$PTV_SAMPLE k=$KMER) ..."
-./scripts/01_run_velvet.sh "$PTV_SAMPLE" "$KMER"
+"${SCRIPT_DIR}/01_run_velvet.sh" "$PTV_SAMPLE" "$KMER"
 
 # 4) BLAST (por kmer)
 log_info "BLAST (sample=$PTV_SAMPLE k=$KMER db=$BLAST_DB_PATH) ..."
-BLAST_DB="$BLAST_DB_PATH" ./scripts/02_run_blast.sh "$PTV_SAMPLE" "$KMER"
+BLAST_DB="$BLAST_DB_PATH" "${SCRIPT_DIR}/02_run_blast.sh" "$PTV_SAMPLE" "$KMER"
 
 # 5) Extract hits
 log_info "Extract hits ..."
-python3 scripts/04_extract_hits.py --sample "$PTV_SAMPLE" --kmer "$KMER"
+(
+  cd "$REPO_ROOT"
+  python3 scripts/04_extract_hits.py --sample "$PTV_SAMPLE" --kmer "$KMER"
+)
 
-OUT="results/phylogeny/${PTV_SAMPLE}_k${KMER}"
+OUT="${RESULTS_DIR}/phylogeny/${PTV_SAMPLE}_k${KMER}"
 
 # 6) MAFFT (refs + addfragments)
 command -v mafft >/dev/null || log_error "mafft não instalado: sudo apt-get install -y mafft"
@@ -96,7 +103,7 @@ echo
 echo
 
   echo "== Assembly contigs (contigs.fa) =="
-  CONTIGS="data/assemblies/${PTV_SAMPLE}_velvet_k${KMER}/contigs.fa"
+  CONTIGS="${ASSEMBLY_DIR}/${PTV_SAMPLE}_velvet_k${KMER}/contigs.fa"
   awk 'BEGIN{n=0}
     /^>/ {if(n>0){c++; sum+=n; if(n>max)max=n; if(n>=200)c200++; if(n>=500)c500++; n=0; next} next}
     {n+=length($0)}
