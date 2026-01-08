@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+if [[ -f "${REPO_ROOT}/config.env" ]]; then
+  source "${REPO_ROOT}/config.env"
+fi
+
+source "${SCRIPT_DIR}/lib/common.sh"
+
 if [[ $# -lt 1 ]]; then
-  echo "Uso: $0 SAMPLE [KMER]" >&2
-  echo "Exemplo: $0 81554_S150 31" >&2
-  exit 1
+  log_error "Uso: $0 SAMPLE [KMER]"
 fi
 
 SAMPLE="$1"
@@ -19,14 +26,14 @@ mkdir -p "$WORK_DIR"
 
 export BLAST_DB
 
-echo "======================================="
-echo " Pipeline avançado PTV - SAMPLE=${SAMPLE} KMER=${KMER}"
-echo "======================================="
+log_info "======================================="
+log_info " Pipeline avançado PTV - SAMPLE=${SAMPLE} KMER=${KMER}"
+log_info "======================================="
 
-echo "[1/7] make test (env, filtro hospedeiro, montagem, BLAST básico)..."
+log_info "[1/7] make test (env, filtro hospedeiro, montagem, BLAST básico)..."
 make test SAMPLE="${SAMPLE}" KMER="${KMER}"
 
-echo "[2/7] BLAST de confirmação com qseq/sseq..."
+log_info "[2/7] BLAST de confirmação com qseq/sseq..."
 blastn \
   -query "${ASSEMBLY_DIR}/contigs.fa" \
   -db "${BLAST_DB}" \
@@ -35,27 +42,27 @@ blastn \
   -max_target_seqs 5 \
   -num_threads 4
 
-echo "[3/7] Identidade ajustada (adj_identity.py)..."
+log_info "[3/7] Identidade ajustada (adj_identity.py)..."
 python3 scripts/adj_identity.py \
   "${WORK_DIR}/ptv_hits.confirm.tsv" \
   "${WORK_DIR}/ptv_hits.adjust.tsv"
 
-echo "[4/7] Relatório resumido (merge_report.py)..."
+log_info "[4/7] Relatório resumido (merge_report.py)..."
 python3 scripts/merge_report.py
 
-echo "[5/7] Plano de extensão de flancos (extend_plan.py)..."
+log_info "[5/7] Plano de extensão de flancos (extend_plan.py)..."
 python3 scripts/extend_plan.py
 
-echo "[6/7] FASTA de flancos (emit_extend_fasta.py)..."
+log_info "[6/7] FASTA de flancos (emit_extend_fasta.py)..."
 python3 scripts/emit_extend_fasta.py
 
-echo "[7/7] Simulação de reads (sim_reads_clean.py) e rótulos (label_hits.py)..."
+log_info "[7/7] Simulação de reads (sim_reads_clean.py) e rótulos (label_hits.py)..."
 python3 scripts/sim_reads_clean.py
 python3 scripts/label_hits.py > "${WORK_DIR}/ptv_hits.labels.tsv"
 
 echo
-echo "[OK] Pipeline avançado concluído."
-echo "Arquivos principais em: ${WORK_DIR}"
+log_info "Pipeline avançado concluído."
+log_info "Arquivos principais em: ${WORK_DIR}"
 echo "  - ptv_hits.confirm.tsv"
 echo "  - ptv_hits.adjust.tsv"
 echo "  - ptv_report.tsv"

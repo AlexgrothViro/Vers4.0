@@ -1,0 +1,13 @@
+name: ptv-pipeline
+channels:
+  - bioconda
+  - conda-forge
+dependencies:
+  - velvet
+  - blast
+  - bowtie2
+  - mafft
+  - fasttree
+  - iqtree
+  - entrez-direct
+  - python>=3.8

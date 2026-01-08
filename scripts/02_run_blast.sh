@@ -1,44 +1,36 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -lt 2 ]]; then
-  echo "Uso: $0 NOME_AMOSTRA KMER" >&2
-  echo "Exemplo: $0 81554_S150 31" >&2
-  exit 1
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+if [[ -f "${REPO_ROOT}/config.env" ]]; then
+  source "${REPO_ROOT}/config.env"
 fi
 
-SAMPLE="$1"
-KMER="$2"
+source "${SCRIPT_DIR}/lib/common.sh"
 
-ASSEMBLY_DIR="data/assemblies"
-RESULTS_BLAST_DIR="results/blast"
+SAMPLE="${1:?SAMPLE obrigatório}"
+KMER="${2:?KMER obrigatório}"
 
-if [[ -z "${BLAST_DB:-}" ]]; then
-  echo "ERRO: variável de ambiente BLAST_DB não definida." >&2
-  echo "Defina, por exemplo:" >&2
-  echo "  export BLAST_DB=/caminho/para/seu_banco/seu_banco" >&2
-  echo "    (sem a extensão .nin/.nhr/.nsq)" >&2
-  exit 1
-fi
+DB="${BLAST_DB:-blastdb/ptv}"
+THREADS="${BLAST_THREADS:-4}"
 
-CONTIGS="${ASSEMBLY_DIR}/${SAMPLE}_velvet_k${KMER}/contigs.fa"
-OUT_TSV="${RESULTS_BLAST_DIR}/${SAMPLE}_vs_db.tsv"
+CONTIGS="data/assemblies/${SAMPLE}_velvet_k${KMER}/contigs.fa"
+OUTDIR="results/blast"
+OUT="${OUTDIR}/${SAMPLE}_k${KMER}_vs_db.tsv"
 
-if [[ ! -f "$CONTIGS" ]]; then
-  echo "ERRO: contigs de entrada não encontrados em:" >&2
-  echo "  $CONTIGS" >&2
-  exit 1
-fi
+mkdir -p "$OUTDIR"
 
-mkdir -p "$RESULTS_BLAST_DIR"
+check_file "$CONTIGS"
+check_file "${DB}.nhr"
 
-echo "[$(date)] Rodando blastn contra ${BLAST_DB}..."
-blastn \
-  -query "$CONTIGS" \
-  -db "$BLAST_DB" \
-  -out "$OUT_TSV" \
-  -outfmt "6 qseqid sacc pident length mismatch gapopen qstart qend sstart send evalue bitscore" \
-  -max_target_seqs 5 \
-  -num_threads 4
+log_info "Rodando blastn contra $DB..."
+blastn -query "$CONTIGS" -db "$DB" \
+  -outfmt '6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore' \
+  -max_target_seqs 5 -evalue 1e-5 -num_threads "$THREADS" > "$OUT"
 
-echo "[$(date)] Resultado salvo em: $OUT_TSV"
+# compat legado (alguns scripts antigos podem ler o nome sem kmer)
+ln -sf "$(basename "$OUT")" "${OUTDIR}/${SAMPLE}_vs_db.tsv"
+
+log_info "Resultado salvo em: $OUT"

@@ -1,16 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+if [[ -f "${REPO_ROOT}/config.env" ]]; then
+  source "${REPO_ROOT}/config.env"
+fi
+
+source "${SCRIPT_DIR}/lib/common.sh"
+
 if [[ $# -ne 1 ]]; then
-  echo "Uso: $0 <saida_fasta> (ex.: data/ref/ptv_db.fa)" >&2
-  exit 1
+  log_error "Uso: $0 <saida_fasta> (ex.: data/ref/ptv_db.fa)"
 fi
 
 OUT_FASTA="$1"
 OUT_DIR="$(dirname "$OUT_FASTA")"
 
 if [[ -s "$OUT_FASTA" ]]; then
-  echo "[OK] FASTA já existe e não está vazio: $OUT_FASTA"
+  log_info "FASTA já existe e não está vazio: $OUT_FASTA"
   exit 0
 fi
 
@@ -31,12 +39,11 @@ EOF
   exit 1
 fi
 
-echo "Baixando sequências de Teschovirus do NCBI (QUERY=${QUERY})..."
+log_info "Baixando sequências de Teschovirus do NCBI (QUERY=${QUERY})..."
 esearch -db nucleotide -query "$QUERY" | efetch -format fasta > "$OUT_FASTA"
 
 if [[ ! -s "$OUT_FASTA" ]]; then
-  echo "ERRO: download falhou, $OUT_FASTA está vazio." >&2
-  exit 1
+  log_error "download falhou, $OUT_FASTA está vazio."
 fi
 
-echo "[OK] FASTA salvo em $OUT_FASTA"
+log_info "FASTA salvo em $OUT_FASTA"

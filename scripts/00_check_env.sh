@@ -1,8 +1,44 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+if [[ -f "${REPO_ROOT}/config.env" ]]; then
+  source "${REPO_ROOT}/config.env"
+fi
+
+if [[ -f "${SCRIPT_DIR}/lib/common.sh" ]]; then
+  source "${SCRIPT_DIR}/lib/common.sh"
+fi
+
+usage() {
+  echo "Uso: $0 [--install]" >&2
+  echo "  --install    tenta instalar dependências obrigatórias via apt-get" >&2
+}
+
+AUTO_INSTALL=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --install)
+      AUTO_INSTALL=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage
+      exit 1
+      ;;
+  esac
+done
+
 # Programas obrigatórios para os testes básicos
 REQUIRED_CMDS=(
+  gcc
+  make
   velveth
   velvetg
   blastn
@@ -10,10 +46,17 @@ REQUIRED_CMDS=(
   bowtie2
   bowtie2-build
   python3
+  dos2unix
+  mafft
+  fasttree
+  esearch
+  efetch
 )
 
-# Programas opcionais (úteis para download via NCBI/HTTP)
-OPTIONAL_CMDS=(esearch efetch curl)
+IQTREE_CANDIDATES=(iqtree iqtree2)
+
+# Programas opcionais (úteis para download via HTTP)
+OPTIONAL_CMDS=(curl)
 
 echo "== Verificando programas necessários no PATH =="
 
@@ -27,6 +70,20 @@ for cmd in "${REQUIRED_CMDS[@]}"; do
     MISSING=1
   fi
 done
+
+IQTREE_FOUND=0
+for cmd in "${IQTREE_CANDIDATES[@]}"; do
+  if command -v "$cmd" >/dev/null 2>&1; then
+    path=$(command -v "$cmd")
+    printf "  [OK] %s encontrado em %s (iqtree/iqtree2)\n" "$cmd" "$path"
+    IQTREE_FOUND=1
+    break
+  fi
+done
+if [[ $IQTREE_FOUND -eq 0 ]]; then
+  echo "  [FALTA] iqtree ou iqtree2 não encontrado no PATH"
+  MISSING=1
+fi
 
 for cmd in "${OPTIONAL_CMDS[@]}"; do
   if command -v "$cmd" >/dev/null 2>&1; then
@@ -71,6 +128,17 @@ fi
 
 if [[ $MISSING -ne 0 ]]; then
   echo
+  if [[ $AUTO_INSTALL -eq 1 ]]; then
+    echo "[AÇÃO] Instalando dependências faltantes via ${SCRIPT_DIR}/99_install_deps.sh"
+    if "${SCRIPT_DIR}/99_install_deps.sh"; then
+      echo
+      echo "[INFO] Reavaliando ambiente após instalação..."
+      exec "$0"
+    else
+      echo "Falha na instalação automática. Confira os logs acima." >&2
+      exit 1
+    fi
+  fi
   echo "Alguns programas estão faltando. Veja a seção 'Ambiente e requisitos' no README.md." >&2
   exit 1
 fi

@@ -40,3 +40,45 @@ quali-2025/
     ├── 10_build_ptv_db.sh       # baixa sequências de Teschovirus A (NCBI) e gera banco BLAST
     └── 11_download_sus_scrofa.sh# baixa o genoma do hospedeiro (Sus scrofa) via NCBI/EDirect
 
+---
+
+## 2. Instalando dependências automaticamente
+
+Se estiver em um ambiente Debian/Ubuntu (inclui WSL), basta rodar:
+
+```bash
+make deps
+```
+
+Esse alvo usa `apt-get` para instalar os requisitos do pipeline (build-essential, Velvet, BLAST+, Bowtie2, MAFFT, FastTree, IQ-TREE/IQ-TREE2, dos2unix e EDirect via `ncbi-entrez-direct`), e depois revalida o ambiente com `scripts/00_check_env.sh`. Caso `apt-get` não esteja disponível, o script aborta e mantém as mensagens de requisitos para instalação manual.
+
+> Dica: se a instalação falhar por restrições de rede/proxy, ajuste o proxy de `apt-get` conforme o ambiente antes de rodar `make deps`.
+
+## 3. WSL/Windows (CRLF)
+
+Ambientes Windows/WSL podem clonar o repositório com finais de linha em CRLF ou perder o bit de execução dos scripts. Para evitar erros do tipo `^M` ou `Permission denied`, execute antes de rodar o pipeline:
+
+```bash
+make fix-wsl
+./scripts/00_check_env.sh --install
+```
+
+O alvo `fix-wsl` normaliza os arquivos rastreados para LF e restaura permissões de execução nos scripts. Em seguida, `00_check_env.sh --install` garante que as dependências (incluindo ferramentas de filogenia) estejam disponíveis. Depois disso, siga o fluxo normal (`make ptv-fasta`, `make blastdb`, etc.).
+
+---
+
+## 4. Comando único (quick start)
+
+Para rodar toda a verificação e o pipeline básico em um único comando, use:
+
+```bash
+./scripts/20_run_pipeline.sh --install --sample 81554_S150 --kmer 31
+```
+
+Esse script faz:
+1. checagem/instalação de dependências;
+2. preparação de diretórios e bancos (FASTA + BLAST + Bowtie2);
+3. montagem dos contigs (Velvet por padrão);
+4. BLAST dos contigs contra o banco de PTV.
+
+Se existir `config.env`, ele é usado como base (ex.: `ASSEMBLER=spades`, `VELVET_K`, `THREADS`). Também dá para chamar via `make pipeline`.

@@ -1,8 +1,25 @@
-# Artefatos gerados (não versionar)
+# Outputs / dados locais (não versionar)
+data/raw/
+data/cleaned/
+data/host_removed/
+data/assemblies/
+data/ptv_enriched/
+results/
 blastdb/
 bowtie2/
-data/ref/
-data/ptv_db.fa
 
-# Arquivo/lixo acidental com "q1"
-*q1*
+# caches/logs
+__pycache__/
+*.pyc
+*.log
+.tmp/
+
+# Referências/entradas locais (baixadas/geradas) e amostras
+data/ref/
+data/*.fa
+amostra/
+# config local (não versionar)
+config.env
+
+# bancos gerados
+data/db/
