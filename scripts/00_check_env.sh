@@ -39,6 +39,7 @@ done
 REQUIRED_CMDS=(
   gcc
   make
+  spades.py
   velveth
   velvetg
   blastn

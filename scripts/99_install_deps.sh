@@ -15,6 +15,7 @@ fi
 REQUIRED_PACKAGES=(
   build-essential     # fornece gcc/make para compilações auxiliares
   dos2unix            # normalização de finais de linha
+  spades              # fornece spades.py
   velvet              # fornece velveth/velvetg
   ncbi-blast+         # fornece blastn/makeblastdb
   bowtie2             # fornece bowtie2/bowtie2-build

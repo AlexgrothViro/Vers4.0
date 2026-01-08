@@ -4,7 +4,7 @@ Neste repositório estou organizando o pipeline que estou desenvolvendo para a q
 O foco é montar e anotar **Porcine Teschovirus (Teschovirus A)** a partir de dados de sequenciamento (FASTQ pareado), com:
 
 - **remoção de leituras do hospedeiro** (Sus scrofa),
-- **montagem de contigs** com Velvet,
+- **montagem de contigs** com Velvet/SPAdes,
 - **BLAST** dos contigs contra um **banco específico de Teschovirus**.
 
 A ideia é ter algo **simples de rodar em qualquer máquina Linux/WSL2**, usando `make` e alguns scripts bash, para poder replicar o fluxo em outros computadores e em outras amostras.
@@ -50,7 +50,7 @@ Se estiver em um ambiente Debian/Ubuntu (inclui WSL), basta rodar:
 make deps
 ```
 
-Esse alvo usa `apt-get` para instalar os requisitos do pipeline (build-essential, Velvet, BLAST+, Bowtie2, MAFFT, FastTree, IQ-TREE/IQ-TREE2, dos2unix e EDirect via `ncbi-entrez-direct`), e depois revalida o ambiente com `scripts/00_check_env.sh`. Caso `apt-get` não esteja disponível, o script aborta e mantém as mensagens de requisitos para instalação manual.
+Esse alvo usa `apt-get` para instalar os requisitos do pipeline (build-essential, SPAdes, Velvet, BLAST+, Bowtie2, MAFFT, FastTree, IQ-TREE/IQ-TREE2, dos2unix e EDirect via `ncbi-entrez-direct`), e depois revalida o ambiente com `scripts/00_check_env.sh`. Caso `apt-get` não esteja disponível, o script aborta e mantém as mensagens de requisitos para instalação manual.
 
 > Dica: se a instalação falhar por restrições de rede/proxy, ajuste o proxy de `apt-get` conforme o ambiente antes de rodar `make deps`.
 
