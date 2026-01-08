@@ -13,11 +13,11 @@ source "${SCRIPT_DIR}/lib/common.sh"
 SAMPLE="${1:?SAMPLE obrigatório}"
 KMER="${2:?KMER obrigatório}"
 
-DB="${BLAST_DB:-blastdb/ptv}"
+DB="$(resolve_path "${BLAST_DB:-blastdb/ptv}")"
 THREADS="${BLAST_THREADS:-4}"
 
-CONTIGS="data/assemblies/${SAMPLE}_velvet_k${KMER}/contigs.fa"
-OUTDIR="results/blast"
+CONTIGS="$(resolve_path "data/assemblies/${SAMPLE}_velvet_k${KMER}/contigs.fa")"
+OUTDIR="$(resolve_path "results/blast")"
 OUT="${OUTDIR}/${SAMPLE}_k${KMER}_vs_db.tsv"
 
 mkdir -p "$OUTDIR"

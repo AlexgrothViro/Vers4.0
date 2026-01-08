@@ -18,7 +18,8 @@ command -v esearch >/dev/null 2>&1 || log_error "EDirect não encontrado (esearc
 command -v efetch  >/dev/null 2>&1 || log_error "EDirect não encontrado (efetch). Instale EDirect."
 command -v makeblastdb >/dev/null 2>&1 || log_error "makeblastdb não encontrado (blast+)."
 
-DB_DIR="${DB_ROOT:-data/db}/${DB_NAME}"
+DB_ROOT_RESOLVED="$(resolve_path "${DB_ROOT:-data/db}")"
+DB_DIR="${DB_ROOT_RESOLVED}/${DB_NAME}"
 FASTA="${DB_DIR}/${DB_NAME}.fasta"
 BLASTDB="${DB_DIR}/${DB_NAME}"
 

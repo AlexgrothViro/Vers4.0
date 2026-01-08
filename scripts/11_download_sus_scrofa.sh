@@ -10,7 +10,7 @@ fi
 
 source "${SCRIPT_DIR}/lib/common.sh"
 
-DEST_DIR="ref/host"
+DEST_DIR="$(resolve_path "${DEST_DIR:-ref/host}")"
 FA="${DEST_DIR}/sus_scrofa.fa"
 
 # Query para pegar sequências genômicas de Sus scrofa em RefSeq

@@ -17,8 +17,8 @@ fi
 SAMPLE="$1"
 KMER="${2:-31}"
 
-RAW_DIR="data/raw"
-ASSEMBLY_DIR="data/assemblies"
+RAW_DIR="$(resolve_path "${RAW_DIR:-data/raw}")"
+ASSEMBLY_DIR="$(resolve_path "${ASSEMBLY_DIR:-data/assemblies}")"
 
 R1="${RAW_DIR}/${SAMPLE}_R1.fastq.gz"
 R2="${RAW_DIR}/${SAMPLE}_R2.fastq.gz"

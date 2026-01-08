@@ -16,9 +16,9 @@ fi
 
 SAMPLE="$1"
 
-RAW_DIR="data/raw"
-HOST_REMOVED_DIR="data/host_removed"
-HOST_INDEX_PREFIX="ref/host/sus_scrofa_bt2"
+RAW_DIR="$(resolve_path "${RAW_DIR:-data/raw}")"
+HOST_REMOVED_DIR="$(resolve_path "${HOST_REMOVED_DIR:-data/host_removed}")"
+HOST_INDEX_PREFIX="$(resolve_path "${HOST_INDEX_PREFIX:-ref/host/sus_scrofa_bt2}")"
 
 R1="${RAW_DIR}/${SAMPLE}_R1.fastq.gz"
 R2="${RAW_DIR}/${SAMPLE}_R2.fastq.gz"
