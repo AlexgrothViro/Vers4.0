@@ -120,3 +120,16 @@ KMER_PTV ?= 51
 .PHONY: ptv-enriched-run
 ptv-enriched-run: bowtie2-index blastdb
 	STOP_AFTER_ALIGN=$(STOP_AFTER_ALIGN) ./scripts/05_ptv_enriched_run.sh "$(SAMPLE)" "$(KMER_PTV)"
+
+# ---- Bundle WSL (micromamba) ----
+BUNDLE_TAG ?= dev
+
+.PHONY: bundle-wsl test-bundle-wsl test-all
+
+bundle-wsl:
+	bash scripts/98_build_bundle_wsl.sh "$(BUNDLE_TAG)"
+
+test-bundle-wsl:
+	bash scripts/99_test_bundle_wsl.sh "$(BUNDLE_TAG)"
+
+test-all: test test-bundle-wsl
