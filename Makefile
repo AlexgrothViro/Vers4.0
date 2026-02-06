@@ -42,6 +42,7 @@ help:
 	@echo "  make bowtie2-index          # gera índice Bowtie2 em $(BOWTIE2_INDEX) (usa $(REF_FASTA))"
 	@echo "  make pipeline               # roda verificação + pipeline completo (scripts/20_run_pipeline.sh)"
 	@echo "  make test-env               # verifica dependências básicas"
+	@echo "  make smoke-test             # roda smoke test (prep + 90_smoke_test.sh)"
 	@echo "  make test                   # roda smoke test (prep + 90_smoke_test.sh)"
 	@echo "  make filter-host/test-velvet/test-blast # alvos individuais legados"
 	@echo "  make clean                  # remove artefatos gerados (blastdb, bowtie2, run_T1, logs/tmp/results)"
@@ -63,6 +64,7 @@ fix-wsl:
 	bash scripts/00_fix_wsl.sh
 
 test-env:
+	BLAST_DB="$(BLAST_DB)" BOWTIE2_INDEX="$(BOWTIE2_INDEX)" \
 	$(SCRIPTS_DIR)/00_check_env.sh
 
 ptv-fasta: setup_dirs
@@ -74,11 +76,23 @@ ptv-fasta-legacy: ptv-fasta
 
 blastdb: ptv-fasta
 	mkdir -p $(dir $(BLAST_DB))
-	makeblastdb -in "$(REF_FASTA)" -dbtype nucl -out "$(BLAST_DB)"
+	if [[ -s "$(BLAST_DB).nhr" && -s "$(BLAST_DB).nin" && -s "$(BLAST_DB).nsq" && "$(BLAST_DB).nhr" -nt "$(REF_FASTA)" ]]; then
+		echo "[INFO] BLAST DB já existe e está atualizado: $(BLAST_DB)"
+	else
+		echo "[INFO] Gerando BLAST DB em $(BLAST_DB) a partir de $(REF_FASTA)"
+		makeblastdb -in "$(REF_FASTA)" -dbtype nucl -out "$(BLAST_DB)"
+	fi
 
 bowtie2-index: ptv-fasta
 	mkdir -p $(dir $(BOWTIE2_INDEX))
-	bowtie2-build "$(REF_FASTA)" "$(BOWTIE2_INDEX)"
+	if [[ -s "$(BOWTIE2_INDEX).1.bt2" && -s "$(BOWTIE2_INDEX).2.bt2" && -s "$(BOWTIE2_INDEX).3.bt2" && -s "$(BOWTIE2_INDEX).4.bt2" \
+	      && -s "$(BOWTIE2_INDEX).rev.1.bt2" && -s "$(BOWTIE2_INDEX).rev.2.bt2" \
+	      && "$(BOWTIE2_INDEX).1.bt2" -nt "$(REF_FASTA)" ]]; then
+		echo "[INFO] Índice Bowtie2 já existe e está atualizado: $(BOWTIE2_INDEX)"
+	else
+		echo "[INFO] Gerando índice Bowtie2 em $(BOWTIE2_INDEX) a partir de $(REF_FASTA)"
+		bowtie2-build "$(REF_FASTA)" "$(BOWTIE2_INDEX)"
+	fi
 
 pipeline:
 	$(SCRIPTS_DIR)/20_run_pipeline.sh
@@ -92,9 +106,11 @@ test-velvet:
 test-blast:
 	$(SCRIPTS_DIR)/02_run_blast.sh $(SAMPLE) $(KMER)
 
-test: test-env ptv-fasta-legacy blastdb bowtie2-index
+smoke-test: test-env ptv-fasta-legacy blastdb bowtie2-index
 	BLAST_DB="$(BLAST_DB)" BOWTIE2_INDEX="$(BOWTIE2_INDEX)" \
 	$(SCRIPTS_DIR)/90_smoke_test.sh
+
+test: smoke-test
 
 clean:
 	rm -rf run_T1 blastdb bowtie2 results logs tmp
