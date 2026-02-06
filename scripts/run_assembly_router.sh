@@ -4,20 +4,37 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
-if [[ -f "${REPO_ROOT}/config.env" ]]; then
-  source "${REPO_ROOT}/config.env"
+CONFIG_FILE="${REPO_ROOT}/config/picornavirus.env"
+LEGACY_CONFIG="${REPO_ROOT}/config.env"
+if [[ -f "${CONFIG_FILE}" ]]; then
+  source "${CONFIG_FILE}"
+elif [[ -f "${LEGACY_CONFIG}" ]]; then
+  source "${LEGACY_CONFIG}"
 fi
 
 source "${SCRIPT_DIR}/lib/common.sh"
 
-if [[ ! -f "${REPO_ROOT}/config.env" ]]; then
-  log_error "config.env não existe. Crie com: cp config.env.example config.env"
+if [[ ! -f "${CONFIG_FILE}" && ! -f "${LEGACY_CONFIG}" ]]; then
+  log_error "config/picornavirus.env não existe. Crie com: cp config/picornavirus.env.example config/picornavirus.env"
 fi
 
 RAW_DIR="$(resolve_path "${RAW_DIR:-data/raw}")"
 ASSEMBLY_DIR="$(resolve_path "${ASSEMBLY_DIR:-data/assemblies}")"
-RAW1="${RAW_DIR}/${SAMPLE_NAME}_R1.fastq.gz"
-RAW2="${RAW_DIR}/${SAMPLE_NAME}_R2.fastq.gz"
+if [[ -n "${SAMPLE_SINGLE:-}" ]]; then
+  log_error "Montagem requer leituras pareadas. Use SAMPLE_R1/SAMPLE_R2."
+fi
+
+if [[ -n "${SAMPLE_R1:-}" ]]; then
+  RAW1="$(resolve_path "${SAMPLE_R1}")"
+else
+  RAW1="${RAW_DIR}/${SAMPLE_NAME}_R1.fastq.gz"
+fi
+
+if [[ -n "${SAMPLE_R2:-}" ]]; then
+  RAW2="$(resolve_path "${SAMPLE_R2}")"
+else
+  RAW2="${RAW_DIR}/${SAMPLE_NAME}_R2.fastq.gz"
+fi
 
 check_file "$RAW1"
 check_file "$RAW2"
