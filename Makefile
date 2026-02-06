@@ -7,6 +7,13 @@ SCRIPTS_DIR := scripts
 # Parâmetros padrão (podem ser sobrescritos: SAMPLE=... KMER=...)
 SAMPLE ?= 81554_S150
 KMER   ?= 31
+ID     ?= amostra_teste
+R1     ?=
+R2     ?=
+SINGLE ?=
+DB     ?= ptv
+DB_QUERY ?=
+KMERS ?=
 
 # Caminhos padrão (podem ser sobrescritos via ambiente ou linha de comando)
 REF_DIR       ?= data/ref
@@ -15,8 +22,10 @@ BLAST_DB      ?= blastdb/ptv
 BOWTIE2_INDEX ?= bowtie2/ptv
 
 .PHONY: help setup_dirs deps test-env filter-host test-velvet test-blast \
-	ptv-fasta ptv-fasta-legacy blastdb bowtie2-index pipeline test clean fix-wsl
+	ptv-fasta ptv-fasta-legacy blastdb bowtie2-index pipeline test clean fix-wsl \
+	db db-list sample-add run
 
+-include config/picornavirus.env
 -include config.env
 
 .PHONY: cfg-all cfg-db cfg-assembly cfg-blast
@@ -40,6 +49,10 @@ help:
 	@echo "  make ptv-fasta-legacy       # cria symlink data/ptv_db.fa -> $(REF_FASTA)"
 	@echo "  make blastdb                # gera banco BLAST em $(BLAST_DB) (usa $(REF_FASTA))"
 	@echo "  make bowtie2-index          # gera índice Bowtie2 em $(BOWTIE2_INDEX) (usa $(REF_FASTA))"
+	@echo "  make db                     # prepara FASTA + BLAST DB + Bowtie2 (via db_manager)"
+	@echo "  make db-list                # lista perfis básicos de DB"
+	@echo "  make sample-add             # faz staging de amostra em data/raw"
+	@echo "  make run                    # sample-add + db + pipeline"
 	@echo "  make pipeline               # roda verificação + pipeline completo (scripts/20_run_pipeline.sh)"
 	@echo "  make test-env               # verifica dependências básicas"
 	@echo "  make smoke-test             # roda smoke test (prep + 90_smoke_test.sh)"
@@ -52,6 +65,9 @@ help:
 	@echo "  BLAST_DB=$(BLAST_DB)"
 	@echo "  BOWTIE2_INDEX=$(BOWTIE2_INDEX)"
 	@echo "  SAMPLE=$(SAMPLE) KMER=$(KMER)"
+	@echo "  ID=$(ID) R1=$(R1) R2=$(R2) SINGLE=$(SINGLE)"
+	@echo "  DB=$(DB) DB_QUERY=$(DB_QUERY)"
+	@echo "  THREADS=$(THREADS) KMERS=$(KMERS)"
 
 setup_dirs:
 	mkdir -p data/raw data/cleaned data/host_removed data/assemblies
@@ -95,6 +111,33 @@ bowtie2-index: ptv-fasta
 	fi
 
 pipeline:
+	$(SCRIPTS_DIR)/20_run_pipeline.sh
+
+db:
+	DB="$(DB)" DB_QUERY="$(DB_QUERY)" REF_FASTA="$(REF_FASTA)" \
+	BLAST_DB="$(BLAST_DB)" BOWTIE2_INDEX="$(BOWTIE2_INDEX)" \
+	$(SCRIPTS_DIR)/13_db_manager.sh setup
+
+db-list:
+	$(SCRIPTS_DIR)/13_db_manager.sh list
+
+sample-add:
+	ARGS=(--id "$(ID)")
+	if [[ -n "$(R1)" ]]; then ARGS+=(--r1 "$(R1)"); fi
+	if [[ -n "$(R2)" ]]; then ARGS+=(--r2 "$(R2)"); fi
+	if [[ -n "$(SINGLE)" ]]; then ARGS+=(--single "$(SINGLE)"); fi
+	if [[ -n "$(COPY)" ]]; then ARGS+=(--copy); fi
+	$(SCRIPTS_DIR)/12_stage_sample.sh "$${ARGS[@]}"
+
+run: sample-add db
+	RUN_R1=""
+	RUN_R2=""
+	RUN_SINGLE=""
+	if [[ -n "$(R1)" ]]; then RUN_R1="data/raw/$(ID)_R1.fastq.gz"; fi
+	if [[ -n "$(R2)" ]]; then RUN_R2="data/raw/$(ID)_R2.fastq.gz"; fi
+	if [[ -n "$(SINGLE)" ]]; then RUN_SINGLE="data/raw/$(ID).fastq.gz"; fi
+	SAMPLE_ID="$(ID)" SAMPLE_R1="$$RUN_R1" SAMPLE_R2="$$RUN_R2" SAMPLE_SINGLE="$$RUN_SINGLE" \
+	DB="$(DB)" DB_QUERY="$(DB_QUERY)" THREADS="$(THREADS)" KMERS="$(KMERS)" \
 	$(SCRIPTS_DIR)/20_run_pipeline.sh
 
 filter-host:

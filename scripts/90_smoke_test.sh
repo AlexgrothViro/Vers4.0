@@ -4,20 +4,30 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
-if [[ -f "${REPO_ROOT}/config.env" ]]; then
-  source "${REPO_ROOT}/config.env"
+CONFIG_FILE="${REPO_ROOT}/config/picornavirus.env"
+LEGACY_CONFIG="${REPO_ROOT}/config.env"
+if [[ -f "${CONFIG_FILE}" ]]; then
+  source "${CONFIG_FILE}"
+elif [[ -f "${LEGACY_CONFIG}" ]]; then
+  source "${LEGACY_CONFIG}"
 fi
 
 source "${SCRIPT_DIR}/lib/common.sh"
 
-PTV_FASTA="data/ptv_db.fa"
-BLAST_DB="${BLAST_DB:-blastdb/ptv}"
-BOWTIE2_INDEX="${BOWTIE2_INDEX:-bowtie2/ptv}"
+DB="${DB:-ptv}"
+DB_QUERY="${DB_QUERY:-\"Teschovirus\"[Organism]}"
+REF_FASTA="${REF_FASTA:-data/ref/${DB}.fa}"
+BLAST_DB="${BLAST_DB:-blastdb/${DB}}"
+BOWTIE2_INDEX="${BOWTIE2_INDEX:-bowtie2/${DB}}"
 
 echo "== Smoke test do pipeline =="
 
-check_file "$PTV_FASTA"
-log_info "FASTA presente: $PTV_FASTA"
+log_info "Preparando DB (DB=${DB})..."
+make -C "$REPO_ROOT" db DB="$DB" DB_QUERY="$DB_QUERY" REF_FASTA="$REF_FASTA" \
+  BLAST_DB="$BLAST_DB" BOWTIE2_INDEX="$BOWTIE2_INDEX"
+
+check_file "$REF_FASTA"
+log_info "FASTA presente: $REF_FASTA"
 
 missing_db=0
 for ext in nhr nin nsq; do
@@ -28,7 +38,7 @@ for ext in nhr nin nsq; do
   fi
 done
 if [[ $missing_db -ne 0 ]]; then
-  log_error "Sugestão: make blastdb"
+  log_error "Sugestão: make db DB=${DB}"
 fi
 log_info "Banco BLAST encontrado em prefixo: $BLAST_DB"
 
@@ -39,7 +49,7 @@ for f in "${BOWTIE2_INDEX}".*.bt2*; do
   fi
 done
 if [[ $missing_bt2 -ne 0 ]]; then
-  log_error "índice Bowtie2 ausente para prefixo ${BOWTIE2_INDEX}. Sugestão: make bowtie2-index"
+  log_error "índice Bowtie2 ausente para prefixo ${BOWTIE2_INDEX}. Sugestão: make db DB=${DB}"
 fi
 log_info "Índice Bowtie2 encontrado em prefixo: $BOWTIE2_INDEX"
 

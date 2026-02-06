@@ -4,8 +4,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
-if [[ -f "${REPO_ROOT}/config.env" ]]; then
-  source "${REPO_ROOT}/config.env"
+CONFIG_FILE="${REPO_ROOT}/config/picornavirus.env"
+LEGACY_CONFIG="${REPO_ROOT}/config.env"
+if [[ -f "${CONFIG_FILE}" ]]; then
+  source "${CONFIG_FILE}"
+elif [[ -f "${LEGACY_CONFIG}" ]]; then
+  source "${LEGACY_CONFIG}"
 fi
 
 if [[ -f "${SCRIPT_DIR}/lib/common.sh" ]]; then
@@ -96,12 +100,24 @@ for cmd in "${OPTIONAL_CMDS[@]}"; do
 done
 
 echo
-PTV_FASTA="data/ptv_db.fa"
-if [[ ! -s "$PTV_FASTA" ]]; then
-  echo "ATENÇÃO: FASTA de referência ausente em $PTV_FASTA."
-  echo "  Sugestão: make ptv-fasta-legacy   # cria data/ptv_db.fa a partir de data/ref/ptv_db.fa"
+REF_FASTA="${REF_FASTA:-data/ref/ptv_db.fa}"
+LEGACY_FASTA="data/ptv_db.fa"
+
+if [[ -s "$REF_FASTA" ]]; then
+  echo "FASTA de referência encontrado: $REF_FASTA"
+  if [[ "$REF_FASTA" == "data/ref/ptv_db.fa" && ! -e "$LEGACY_FASTA" ]]; then
+    mkdir -p data
+    ln -sf "$(resolve_path "$REF_FASTA")" "$LEGACY_FASTA"
+    echo "  [INFO] Symlink criado: $LEGACY_FASTA -> $REF_FASTA"
+  fi
+elif [[ -s "$LEGACY_FASTA" ]]; then
+  echo "FASTA de referência encontrado: $LEGACY_FASTA"
+elif compgen -G "data/ref/*.fa" >/dev/null; then
+  echo "FASTA(s) encontrada(s) em data/ref/:"
+  ls -1 data/ref/*.fa
 else
-  echo "FASTA de referência encontrado: $PTV_FASTA"
+  echo "ATENÇÃO: FASTA de referência ausente em data/ref/*.fa."
+  echo "  Sugestão: make ptv-fasta   # cria data/ref/ptv_db.fa"
 fi
 
 if ! command -v esearch >/dev/null 2>&1 || ! command -v efetch >/dev/null 2>&1; then

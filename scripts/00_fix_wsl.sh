@@ -4,8 +4,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel)"
 
-if [[ -f "${REPO_ROOT}/config.env" ]]; then
-  source "${REPO_ROOT}/config.env"
+CONFIG_FILE="${REPO_ROOT}/config/picornavirus.env"
+LEGACY_CONFIG="${REPO_ROOT}/config.env"
+if [[ -f "${CONFIG_FILE}" ]]; then
+  source "${CONFIG_FILE}"
+elif [[ -f "${LEGACY_CONFIG}" ]]; then
+  source "${LEGACY_CONFIG}"
 fi
 
 if [[ -f "${SCRIPT_DIR}/lib/common.sh" ]]; then
@@ -22,11 +26,16 @@ fi
 echo "[INFO] Normalizando final de linha (LF) em arquivos rastreados..."
 mapfile -t tracked_files < <(git ls-files '*.sh' '*.py' '*.md' '*.env' '*.tsv' '*.txt' 'Makefile')
 
-# Inclui config.env* se existirem (mesmo que não estejam versionados)
+# Inclui configs locais se existirem (mesmo que não estejam versionados)
 if compgen -G 'config.env*' >/dev/null; then
   while IFS= read -r cfg; do
     tracked_files+=("$cfg")
   done < <(ls config.env*)
+fi
+if compgen -G 'config/picornavirus.env*' >/dev/null; then
+  while IFS= read -r cfg; do
+    tracked_files+=("$cfg")
+  done < <(ls config/picornavirus.env*)
 fi
 
 if (( ${#tracked_files[@]} > 0 )); then

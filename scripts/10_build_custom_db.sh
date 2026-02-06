@@ -4,14 +4,18 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
-if [[ -f "${REPO_ROOT}/config.env" ]]; then
-  source "${REPO_ROOT}/config.env"
+CONFIG_FILE="${REPO_ROOT}/config/picornavirus.env"
+LEGACY_CONFIG="${REPO_ROOT}/config.env"
+if [[ -f "${CONFIG_FILE}" ]]; then
+  source "${CONFIG_FILE}"
+elif [[ -f "${LEGACY_CONFIG}" ]]; then
+  source "${LEGACY_CONFIG}"
 fi
 
 source "${SCRIPT_DIR}/lib/common.sh"
 
-if [[ ! -f "${REPO_ROOT}/config.env" ]]; then
-  log_error "config.env não existe. Crie com: cp config.env.example config.env"
+if [[ ! -f "${CONFIG_FILE}" && ! -f "${LEGACY_CONFIG}" ]]; then
+  log_error "config/picornavirus.env não existe. Crie com: cp config/picornavirus.env.example config/picornavirus.env"
 fi
 
 command -v esearch >/dev/null 2>&1 || log_error "EDirect não encontrado (esearch). Instale EDirect."
