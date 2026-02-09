@@ -95,7 +95,7 @@ bowtie2-index: ptv-fasta
 	fi
 
 pipeline:
-	$(SCRIPTS_DIR)/20_run_pipeline.sh
+	BLAST_DB="$(BLAST_DB)" BOWTIE2_INDEX="$(BOWTIE2_INDEX)" scripts/20_run_pipeline.sh --sample "$(SAMPLE)"
 
 filter-host:
 	$(SCRIPTS_DIR)/03_filter_host.sh $(SAMPLE)
@@ -133,3 +133,62 @@ test-bundle-wsl:
 	bash scripts/99_test_bundle_wsl.sh "$(BUNDLE_TAG)"
 
 test-all: test test-bundle-wsl
+# ---- DB convenience targets ----
+# Observação: existe um diretório chamado "db/" no repo.
+# Para permitir "make db", este alvo é PHONY (não conflita com a pasta).
+DB ?= ptv
+
+.PHONY: db db-list host-db
+
+db-list:
+	@echo "DBs disponíveis:"
+	@echo "  ptv   -> baixa FASTA (NCBI), gera BLAST DB e índice Bowtie2"
+	@echo "  host  -> baixa hospedeiro (Sus scrofa) e gera índice Bowtie2 (opcional)"
+	@echo "  all   -> ptv + host"
+	@echo
+	@echo "Uso:"
+	@echo "  make db DB=ptv"
+	@echo "  make db DB=host"
+	@echo "  make db DB=all"
+
+db:
+	@case "$(DB)" in \
+		ptv)  $(MAKE) ptv-fasta ptv-fasta-legacy blastdb bowtie2-index ;; \
+		host) $(MAKE) host-db ;; \
+		all)  $(MAKE) db DB=ptv; $(MAKE) db DB=host ;; \
+		*)    echo "[ERRO] DB inválido: $(DB)"; $(MAKE) db-list; exit 2 ;; \
+	esac
+
+# Gera índice Bowtie2 do hospedeiro em ref/host/sus_scrofa_bt2*
+# (A pipeline hoje procura por ref/host/sus_scrofa_bt2.1.bt2)
+host-db:
+	@mkdir -p ref/host data/ref/host
+	@bash scripts/11_download_sus_scrofa.sh || true
+	@HOST_FASTA="$$(ls -1 ref/host/*.fa ref/host/*.fasta ref/host/*.fa.gz ref/host/*.fasta.gz data/ref/host/*.fa data/ref/host/*.fasta data/ref/host/*.fa.gz data/ref/host/*.fasta.gz 2>/dev/null | head -n1)"; \
+	if [[ -z "$$HOST_FASTA" ]]; then \
+		echo "[ERRO] Nenhum FASTA do hospedeiro encontrado em ref/host/ ou data/ref/host/."; \
+		echo "       Verifique scripts/11_download_sus_scrofa.sh (saída/paths)."; \
+		exit 1; \
+	fi; \
+	if [[ "$$HOST_FASTA" == *.gz ]]; then \
+		echo "[INFO] Descompactando FASTA do hospedeiro para ref/host/sus_scrofa.fa"; \
+		gzip -cd "$$HOST_FASTA" > ref/host/sus_scrofa.fa; \
+		HOST_FASTA=ref/host/sus_scrofa.fa; \
+	else \
+		if [[ "$$HOST_FASTA" != ref/host/* ]]; then \
+			ln -sf "$$(realpath "$$HOST_FASTA")" ref/host/sus_scrofa.fa; \
+			HOST_FASTA=ref/host/sus_scrofa.fa; \
+		else \
+			HOST_FASTA="$$HOST_FASTA"; \
+		fi; \
+	fi; \
+	if [[ -s ref/host/sus_scrofa_bt2.1.bt2 && ref/host/sus_scrofa_bt2.1.bt2 -nt "$$HOST_FASTA" ]]; then \
+		echo "[INFO] Índice do hospedeiro já existe e está atualizado: ref/host/sus_scrofa_bt2"; \
+	else \
+		echo "[INFO] Gerando índice Bowtie2 do hospedeiro em ref/host/sus_scrofa_bt2"; \
+		bowtie2-build "$$HOST_FASTA" ref/host/sus_scrofa_bt2; \
+	fi
+
+.PHONY: import-sample
+import-sample:
+	bash scripts/00_import_sample.sh --sample "$(SAMPLE)" --r1 "$(R1)" --r2 "$(R2)"
