@@ -75,6 +75,23 @@ ASSEMBLER="${ASSEMBLER:-velvet}"
 THREADS="${THREADS:-4}"
 BLAST_DB="$(resolve_path "${BLAST_DB:-blastdb/ptv}")"
 
+# --- Preflight: garantir FASTQs da amostra ---
+RAW_DIR="${REPO_ROOT}/data/raw"
+R1="${RAW_DIR}/${SAMPLE_NAME}_R1.fastq.gz"
+R2="${RAW_DIR}/${SAMPLE_NAME}_R2.fastq.gz"
+if [[ ! -s "$R1" || ! -s "$R2" ]]; then
+  echo "[ERRO] FASTQs da amostra não encontrados ou vazios:" >&2
+  echo "       $R1" >&2
+  echo "       $R2" >&2
+  echo "" >&2
+  echo "[DICA] Importe uma amostra com:" >&2
+  echo "  bash scripts/00_import_sample.sh --sample NOME --r1 CAMINHO --r2 CAMINHO [--copy]" >&2
+  echo "[DICA] Amostras detectadas em data/raw:" >&2
+  ls -1 "${RAW_DIR}"/*_R1.fastq.gz 2>/dev/null | sed -E 's#.*/##; s/_R1\.fastq\.gz$//' | sort -u | sed 's/^/  - /' >&2 || true
+  exit 1
+fi
+
+
 log() {
   printf '\n== %s ==\n' "$1"
 }
@@ -107,6 +124,8 @@ fi
 log "[4/6] Montagem de contigs"
 ASSEMBLY_CONTIGS=""
 if [[ $HAS_CONFIG -eq 1 && "$ASSEMBLER" == "spades" ]]; then
+  export SAMPLE="$SAMPLE_NAME"
+  export SAMPLE_NAME="$SAMPLE_NAME"
   "$SCRIPT_DIR/run_assembly_router.sh"
   ASSEMBLY_CONTIGS="${REPO_ROOT}/data/assemblies/${SAMPLE_NAME}_assembly/contigs.fa"
 else
@@ -140,6 +159,10 @@ blastn -query "$ASSEMBLY_CONTIGS" -db "$BLAST_DB" \
 ln -sf "$(basename "$OUT")" "${OUTDIR}/${SAMPLE_NAME}_vs_db.tsv"
 
 echo "Resultado salvo em: $OUT"
+
+REPORT="${REPO_ROOT}/results/reports/${SAMPLE_NAME}_summary.md"
+"$SCRIPT_DIR/95_report_minimal.sh" --sample "$SAMPLE_NAME" --contigs "$ASSEMBLY_CONTIGS" --blast "$OUT" --out "$REPORT"
+echo "Resumo salvo em: $REPORT"
 
 log "[6/6] Pipeline concluído"
 echo "Amostra: $SAMPLE_NAME"

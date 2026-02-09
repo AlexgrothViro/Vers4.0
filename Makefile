@@ -35,7 +35,8 @@ cfg-blast:
 help:
 	@echo "Alvos disponíveis:"
 	@echo "  make deps                  # instala dependências (apt-get) e roda check de ambiente"
-	@echo "  make setup_dirs             # cria estrutura básica (data/, results/, docs/)"
+	@echo "  make setup_dirs             # cria estrutura básica (data/, results/, docs/)
+	@echo "  make demo                  # gera FASTQ demo reprodutível em data/raw (DEMO_R1/R2)"
 	@echo "  make ptv-fasta              # baixa/gera FASTA de PTV em $(REF_FASTA)"
 	@echo "  make ptv-fasta-legacy       # cria symlink data/ptv_db.fa -> $(REF_FASTA)"
 	@echo "  make blastdb                # gera banco BLAST em $(BLAST_DB) (usa $(REF_FASTA))"
@@ -192,3 +193,12 @@ host-db:
 .PHONY: import-sample
 import-sample:
 	bash scripts/00_import_sample.sh --sample "$(SAMPLE)" --r1 "$(R1)" --r2 "$(R2)"
+
+
+check-env: test-env
+	@:
+
+
+.PHONY: demo
+demo: ptv-fasta
+	python3 scripts/97_make_demo_fastq.py --ref "$(REF_FASTA)" --outdir data/raw --sample DEMO --pairs 2000 --len 150 --insert 300
