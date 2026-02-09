@@ -15,7 +15,8 @@ BLAST_DB      ?= blastdb/ptv
 BOWTIE2_INDEX ?= bowtie2/ptv
 
 .PHONY: help setup_dirs deps test-env filter-host test-velvet test-blast \
-	ptv-fasta ptv-fasta-legacy blastdb bowtie2-index pipeline test clean fix-wsl
+	ptv-fasta ptv-fasta-legacy blastdb bowtie2-index pipeline test clean fix-wsl \
+	dashboard
 
 -include config.env
 
@@ -42,6 +43,7 @@ help:
 	@echo "  make blastdb                # gera banco BLAST em $(BLAST_DB) (usa $(REF_FASTA))"
 	@echo "  make bowtie2-index          # gera índice Bowtie2 em $(BOWTIE2_INDEX) (usa $(REF_FASTA))"
 	@echo "  make pipeline               # roda verificação + pipeline completo (scripts/20_run_pipeline.sh)"
+	@echo "  make dashboard              # inicia painel UX local (http://localhost:8787)"
 	@echo "  make test-env               # verifica dependências básicas"
 	@echo "  make smoke-test             # roda smoke test (prep + 90_smoke_test.sh)"
 	@echo "  make test                   # roda smoke test (prep + 90_smoke_test.sh)"
@@ -197,6 +199,9 @@ import-sample:
 
 check-env: test-env
 	@:
+
+dashboard:
+	python3 scripts/ux_dashboard.py --host 0.0.0.0 --port 8787
 
 
 .PHONY: demo

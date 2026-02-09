@@ -82,3 +82,23 @@ Esse script faz:
 4. BLAST dos contigs contra o banco de PTV.
 
 Se existir `config.env`, ele é usado como base (ex.: `ASSEMBLER=spades`, `VELVET_K`, `THREADS`). Também dá para chamar via `make pipeline`.
+
+---
+
+## 5. Painel de uso (UX)
+
+Para facilitar a execução por usuários não técnicos, existe um painel web simples que roda no WSL
+e pode ser acessado pelo navegador do Windows.
+
+```bash
+make dashboard
+```
+
+Depois, abra `http://localhost:8787` no Windows. O painel oferece:
+
+- **checagem de ambiente** (`make test-env`);
+- **geração de DEMO** (`make demo`);
+- **importação de amostras** (R1/R2);
+- **execução do pipeline** (Velvet por padrão, SPAdes opcional).
+
+Detalhes adicionais estão em `docs/UX_DASHBOARD.md`.
