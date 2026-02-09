@@ -24,3 +24,4 @@ config.env
 # bancos gerados
 data/db/
 dist/
+tmp/
