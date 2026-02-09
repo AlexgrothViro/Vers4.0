@@ -15,7 +15,7 @@ BLAST_DB      ?= blastdb/ptv
 BOWTIE2_INDEX ?= bowtie2/ptv
 
 .PHONY: help setup_dirs deps test-env filter-host test-velvet test-blast \
-	ptv-fasta ptv-fasta-legacy blastdb bowtie2-index pipeline test clean fix-wsl
+	ptv-fasta ptv-fasta-legacy blastdb bowtie2-index pipeline test clean fix-wsl ux
 
 -include config.env
 
@@ -47,6 +47,7 @@ help:
 	@echo "  make test                   # roda smoke test (prep + 90_smoke_test.sh)"
 	@echo "  make filter-host/test-velvet/test-blast # alvos individuais legados"
 	@echo "  make clean                  # remove artefatos gerados (blastdb, bowtie2, run_T1, logs/tmp/results)"
+	@echo "  make ux                     # inicia o painel web local"
 	@echo
 	@echo "Variáveis úteis:"
 	@echo "  REF_FASTA=$(REF_FASTA)"
@@ -202,3 +203,6 @@ check-env: test-env
 .PHONY: demo
 demo: ptv-fasta
 	python3 scripts/97_make_demo_fastq.py --ref "$(REF_FASTA)" --outdir data/raw --sample DEMO --pairs 2000 --len 150 --insert 300
+
+ux:
+	python3 scripts/ux_dashboard.py --host 0.0.0.0 --port 8000
