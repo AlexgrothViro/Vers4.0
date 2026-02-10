@@ -2,14 +2,14 @@
 set -euo pipefail
 
 usage() {
-  cat <<EOF
+  cat <<EOF2
 Uso:
   bash scripts/00_import_sample.sh --sample NOME --r1 CAMINHO --r2 CAMINHO [--copy]
 
-Faz symlink (padrão) ou cópia para:
+Importa para:
   data/raw/NOME_R1.fastq.gz
   data/raw/NOME_R2.fastq.gz
-EOF
+EOF2
 }
 
 SAMPLE=""
@@ -19,7 +19,6 @@ MODE="link"
 
 normalize_windows_path() {
   local raw="$1"
-  # Remove aspas externas eventualmente passadas pelo usuário/copiar-colar.
   raw="${raw%\"}"
   raw="${raw#\"}"
   raw="${raw%$'\r'}"
@@ -32,6 +31,14 @@ normalize_windows_path() {
   fi
 
   printf '%s\n' "$raw"
+}
+
+check_ext() {
+  local file="$1"
+  [[ "$file" =~ \.fastq$ || "$file" =~ \.fastq\.gz$ ]] || {
+    echo "[ERRO] extensão inválida (use .fastq ou .fastq.gz): $file"
+    exit 1
+  }
 }
 
 while [[ $# -gt 0 ]]; do
@@ -47,31 +54,56 @@ done
 
 [[ -n "$SAMPLE" && -n "$R1" && -n "$R2" ]] || { echo "[ERRO] faltou --sample/--r1/--r2"; usage; exit 2; }
 
-# Windows -> WSL se necessário (inclui caminhos com espaços)
 R1="$(normalize_windows_path "$R1")"
 R2="$(normalize_windows_path "$R2")"
 
-mkdir -p data/raw
+if [[ ! -f "$R1" ]]; then
+  echo "[ERRO] R1 não encontrado: $R1"
+  exit 1
+fi
+if [[ ! -f "$R2" ]]; then
+  echo "[ERRO] R2 não encontrado: $R2"
+  exit 1
+fi
+if [[ ! -s "$R1" ]]; then
+  echo "[ERRO] arquivo vazio: $R1"
+  exit 1
+fi
+if [[ ! -s "$R2" ]]; then
+  echo "[ERRO] arquivo vazio: $R2"
+  exit 1
+fi
 
+check_ext "$R1"
+check_ext "$R2"
+
+if [[ "$R1" != *"R1"* ]]; then
+  echo "[AVISO] arquivo R1 não contém marcador R1 no nome: $R1"
+fi
+if [[ "$R2" != *"R2"* ]]; then
+  echo "[AVISO] arquivo R2 não contém marcador R2 no nome: $R2"
+fi
+
+mkdir -p data/raw
 out1="data/raw/${SAMPLE}_R1.fastq.gz"
 out2="data/raw/${SAMPLE}_R2.fastq.gz"
 
-for f in "$R1" "$R2"; do
-  [[ -s "$f" ]] || { echo "[ERRO] arquivo não existe ou vazio: $f"; exit 1; }
-done
-
-do_place() {
+place_fastq() {
   local src="$1" dst="$2"
-  if [[ "$MODE" == "copy" ]]; then
-    cp -f "$src" "$dst"
+  if [[ "$src" == *.fastq.gz ]]; then
+    if [[ "$MODE" == "copy" ]]; then
+      cp -f "$src" "$dst"
+    else
+      ln -sf "$(realpath "$src")" "$dst"
+    fi
   else
-    ln -sf "$(realpath "$src")" "$dst"
+    gzip -c "$src" > "$dst"
   fi
 }
 
-do_place "$R1" "$out1"
-do_place "$R2" "$out2"
+place_fastq "$R1" "$out1"
+place_fastq "$R2" "$out2"
 
-echo "[OK] Amostra importada:"
-echo "  $out1 -> $R1"
-echo "  $out2 -> $R2"
+echo "[OK] Amostra importada: $SAMPLE"
+echo "  $out1"
+echo "  $out2"

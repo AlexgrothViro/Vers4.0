@@ -2,11 +2,13 @@ const statusEl = document.getElementById("job-status");
 const actionEl = document.getElementById("job-action");
 const outputEl = document.getElementById("job-output");
 const samplesDatalist = document.getElementById("samples");
+const sampleSelectEl = document.getElementById("sample-select");
 const finalStatusEl = document.getElementById("final-status");
 const historyListEl = document.getElementById("history-list");
 const pipelineProgressEl = document.getElementById("pipeline-progress");
 const reportViewerEl = document.getElementById("report-viewer");
 const reportContentEl = document.getElementById("report-content");
+const dbTargetEl = document.getElementById("db-target");
 
 const stageConfig = {
   host: { marker: "[3/6]", label: "Remoção de hospedeiro" },
@@ -14,13 +16,7 @@ const stageConfig = {
   blast: { marker: "[5/6]", label: "BLAST" },
 };
 
-const stageIcon = {
-  pending: "⏳",
-  running: "🔄",
-  done: "✅",
-  error: "❌",
-  skipped: "⏭️",
-};
+const stageIcon = { pending: "⏳", running: "🔄", done: "✅", error: "❌", skipped: "⏭️" };
 
 const setStatus = (status, action) => {
   statusEl.textContent = status;
@@ -29,11 +25,6 @@ const setStatus = (status, action) => {
 
 const setOutput = (text) => {
   outputEl.textContent = text || "";
-  outputEl.scrollTop = outputEl.scrollHeight;
-};
-
-const appendOutput = (text) => {
-  outputEl.textContent += text;
   outputEl.scrollTop = outputEl.scrollHeight;
 };
 
@@ -76,17 +67,28 @@ const updatePipelineProgressFromOutput = (output, jobStatus) => {
   applyStageState("assembly", hasAssembly ? "done" : (hasHost || skippedHost ? "running" : "pending"));
   applyStageState("blast", hasBlast ? "running" : "pending");
 
-  if (jobStatus === "done") {
-    applyStageState("blast", "done");
-  }
+  if (jobStatus === "done") applyStageState("blast", "done");
   if (jobStatus === "error") {
-    if (hasBlast) {
-      applyStageState("blast", "error");
-    } else if (hasAssembly) {
-      applyStageState("assembly", "error");
-    } else if (hasHost || skippedHost) {
-      applyStageState("host", "error");
-    }
+    if (hasBlast) applyStageState("blast", "error");
+    else if (hasAssembly) applyStageState("assembly", "error");
+    else if (hasHost || skippedHost) applyStageState("host", "error");
+  }
+};
+
+const fetchTargets = async () => {
+  try {
+    const response = await fetch("/api/targets");
+    if (!response.ok) return;
+    const data = await response.json();
+    dbTargetEl.innerHTML = "";
+    (data.targets || []).forEach((target) => {
+      const option = document.createElement("option");
+      option.value = target.key;
+      option.textContent = `${target.display_name} (${target.key})`;
+      dbTargetEl.appendChild(option);
+    });
+  } catch (err) {
+    console.error("Falha ao listar targets", err);
   }
 };
 
@@ -96,10 +98,16 @@ const fetchSamples = async () => {
     if (!response.ok) return;
     const data = await response.json();
     samplesDatalist.innerHTML = "";
-    data.samples.forEach((sample) => {
+    sampleSelectEl.innerHTML = '<option value="">Selecione uma amostra</option>';
+    (data.samples || []).forEach((sample) => {
       const option = document.createElement("option");
       option.value = sample;
       samplesDatalist.appendChild(option);
+
+      const selectOption = document.createElement("option");
+      selectOption.value = sample;
+      selectOption.textContent = sample;
+      sampleSelectEl.appendChild(selectOption);
     });
   } catch (err) {
     console.error("Falha ao listar amostras", err);
@@ -111,16 +119,10 @@ const openRunArtifact = (runDir, fileType) => {
 };
 
 const loadReportInline = async (runDir) => {
-  if (!runDir) {
-    setReportContent("");
-    return;
-  }
+  if (!runDir) return setReportContent("");
   try {
     const response = await fetch(`/api/history/file?run=${encodeURIComponent(runDir)}&type=report`);
-    if (!response.ok) {
-      setReportContent("");
-      return;
-    }
+    if (!response.ok) return setReportContent("");
     setReportContent(await response.text());
   } catch (err) {
     console.error("Falha ao carregar resumo", err);
@@ -134,56 +136,39 @@ const rerunHistory = async (runDir) => {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ run_dir: runDir }),
   });
-  if (!response.ok) {
-    const text = await response.text();
-    alert(`Falha ao reexecutar: ${text}`);
-    return;
-  }
+  if (!response.ok) return alert(`Falha ao reexecutar: ${await response.text()}`);
   const { job_id: jobId } = await response.json();
   setStatus("Executando...", `rerun:${runDir}`);
   setOutput("");
   setFinalStatus("");
-  setReportContent("");
   showPipelineProgress(true);
   pollJob(jobId, `rerun:${runDir}`);
 };
-
-const formatDate = (value) => (value ? value.replace("T", " ") : "-");
 
 const renderHistory = (runs) => {
   if (!runs.length) {
     historyListEl.innerHTML = "<p>Nenhuma execução registrada ainda.</p>";
     return;
   }
-
   historyListEl.innerHTML = "";
   runs.forEach((run) => {
     const card = document.createElement("article");
     card.className = "history-item";
-    const sample = run.sample || "(sem sample)";
-    const status = run.exit_code === 0 ? "SUCESSO" : "FALHA";
     const statusClass = run.exit_code === 0 ? "ok" : "error";
-
     card.innerHTML = `
-      <header>
-        <h3>${sample}</h3>
-        <span class="badge ${statusClass}">${status}</span>
-      </header>
-      <p><strong>Início:</strong> ${formatDate(run.start)} • <strong>Fim:</strong> ${formatDate(run.end)}</p>
-      <p><strong>Assembler:</strong> ${run.assembler || "-"} • <strong>k-mer:</strong> ${run.kmer || "-"} • <strong>Threads:</strong> ${run.threads || "-"}</p>
+      <header><h3>${run.sample || "(sem sample)"}</h3><span class="badge ${statusClass}">${run.exit_code === 0 ? "SUCESSO" : "FALHA"}</span></header>
+      <p><strong>Início:</strong> ${(run.start || "-").replace("T", " ")} • <strong>Fim:</strong> ${(run.end || "-").replace("T", " ")}</p>
       <div class="actions">
         <button data-open="report">Abrir report</button>
         <button data-open="log">Abrir log</button>
         <button data-open="blast">Abrir blast</button>
         <button data-rerun="1">Reexecutar</button>
-      </div>
-    `;
+      </div>`;
 
     card.querySelectorAll("button[data-open]").forEach((button) => {
       button.addEventListener("click", () => openRunArtifact(run.run_dir, button.dataset.open));
     });
     card.querySelector("button[data-rerun]").addEventListener("click", () => rerunHistory(run.run_dir));
-
     historyListEl.appendChild(card);
   });
 };
@@ -192,8 +177,7 @@ const fetchHistory = async () => {
   try {
     const response = await fetch("/api/history");
     if (!response.ok) return;
-    const data = await response.json();
-    renderHistory(data.runs || []);
+    renderHistory((await response.json()).runs || []);
   } catch (err) {
     console.error("Falha ao carregar histórico", err);
   }
@@ -213,14 +197,11 @@ const runAction = async (action, params = {}) => {
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
     setStatus("Erro ao iniciar", action);
-    appendOutput(errorText || "Falha ao iniciar a execução.\n");
+    setOutput((await response.text()) || "Falha ao iniciar");
     return;
   }
-
-  const { job_id: jobId } = await response.json();
-  pollJob(jobId, action);
+  pollJob((await response.json()).job_id, action);
 };
 
 const pollJob = (jobId, action) => {
@@ -228,37 +209,27 @@ const pollJob = (jobId, action) => {
     const response = await fetch(`/api/job/${jobId}`);
     if (!response.ok) {
       setStatus("Erro ao consultar", action);
-      clearInterval(interval);
-      return;
+      return clearInterval(interval);
     }
     const data = await response.json();
-    const output = data.output || "";
-    setOutput(output);
+    setOutput(data.output || "");
 
     if ((action === "pipeline" || action.startsWith("rerun:")) && data.status !== "queued") {
       showPipelineProgress(true);
-      updatePipelineProgressFromOutput(output, data.status);
-    } else {
-      showPipelineProgress(false);
-    }
+      updatePipelineProgressFromOutput(data.output || "", data.status);
+    } else showPipelineProgress(false);
 
-    if (data.status === "running" || data.status === "queued") {
-      setStatus("Executando...", action);
-      return;
-    }
+    if (data.status === "running" || data.status === "queued") return setStatus("Executando...", action);
 
     if (data.status === "done") {
       setStatus("Concluído", action);
       const runDir = data.run?.run_dir || "";
-      const reportLink = runDir
-        ? `<a href="/api/history/file?run=${encodeURIComponent(runDir)}&type=report" target="_blank">Abrir report</a>`
-        : "Report indisponível";
+      const reportLink = runDir ? `<a href="/api/history/file?run=${encodeURIComponent(runDir)}&type=report" target="_blank">Abrir report</a>` : "";
       setFinalStatus(`<strong>SUCESSO</strong> ✅ ${reportLink}`, "ok");
       await loadReportInline(runDir);
     } else {
       setStatus("Falhou", action);
-      const tail = data.tail || "Sem log disponível.";
-      setFinalStatus(`<strong>FALHA</strong> ❌<pre>${tail}</pre>`, "error");
+      setFinalStatus(`<strong>FALHA</strong> ❌<pre>${data.tail || "Sem log disponível."}</pre>`, "error");
     }
 
     clearInterval(interval);
@@ -267,15 +238,42 @@ const pollJob = (jobId, action) => {
   }, 1200);
 };
 
+const uploadImport = async (formData) => {
+  setStatus("Executando...", "upload_import");
+  setOutput("");
+  setFinalStatus("");
+
+  const response = await fetch("/api/import-upload", { method: "POST", body: formData });
+  if (!response.ok) {
+    const msg = await response.text();
+    setFinalStatus(`<strong>FALHA</strong> ❌<pre>${msg}</pre>`, "error");
+    setStatus("Falhou", "upload_import");
+    return;
+  }
+  const data = await response.json();
+  setStatus("Concluído", "upload_import");
+  setFinalStatus(`<strong>SUCESSO</strong> ✅ ${data.message}`, "ok");
+  fetchSamples();
+};
+
 const bindButtons = () => {
   document.querySelectorAll("button[data-action]").forEach((button) => {
     button.addEventListener("click", () => runAction(button.dataset.action));
   });
 
-  const importForm = document.getElementById("import-form");
-  importForm.addEventListener("submit", (event) => {
+  document.getElementById("db-form").addEventListener("submit", (event) => {
     event.preventDefault();
-    const formData = new FormData(importForm);
+    const formData = new FormData(event.target);
+    runAction("build_db", {
+      target: formData.get("target"),
+      query: formData.get("query"),
+      taxid: formData.get("taxid"),
+    });
+  });
+
+  document.getElementById("import-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const formData = new FormData(event.target);
     runAction("import_sample", {
       sample: formData.get("sample"),
       r1: formData.get("r1"),
@@ -284,12 +282,16 @@ const bindButtons = () => {
     });
   });
 
-  const pipelineForm = document.getElementById("pipeline-form");
-  pipelineForm.addEventListener("submit", (event) => {
+  document.getElementById("upload-form").addEventListener("submit", (event) => {
     event.preventDefault();
-    const formData = new FormData(pipelineForm);
+    uploadImport(new FormData(event.target));
+  });
+
+  document.getElementById("pipeline-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const formData = new FormData(event.target);
     runAction("pipeline", {
-      sample: formData.get("sample"),
+      sample: formData.get("sample_select") || formData.get("sample"),
       assembler: formData.get("assembler"),
       kmer: formData.get("kmer"),
     });
@@ -308,6 +310,7 @@ const bindButtons = () => {
 
 window.addEventListener("load", () => {
   bindButtons();
+  fetchTargets();
   fetchSamples();
   fetchHistory();
   showPipelineProgress(false);

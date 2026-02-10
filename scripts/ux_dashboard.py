@@ -7,6 +7,7 @@ import shutil
 import threading
 import time
 import uuid
+import zipfile
 from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -18,6 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DASHBOARD_DIR = REPO_ROOT / "dashboard"
 LOG_DIR = REPO_ROOT / "logs"
 RUNS_DIR = REPO_ROOT / "results" / "runs"
+TARGETS_FILE = REPO_ROOT / "config" / "targets.json"
 
 MAX_OUTPUT_LINES = 4000
 
@@ -41,6 +43,44 @@ def read_tail(path, lines=30):
     except FileNotFoundError:
         return "(log não encontrado)"
     return "\n".join(content[-lines:])
+
+
+def list_targets():
+    if not TARGETS_FILE.exists():
+        return []
+    try:
+        data = json.loads(TARGETS_FILE.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    return data if isinstance(data, list) else []
+
+
+def validate_fastq_name(name):
+    return name.endswith(".fastq") or name.endswith(".fastq.gz")
+
+
+def normalize_sample_from_filename(filename):
+    name = filename
+    for suffix in ["_R1.fastq.gz", "_R2.fastq.gz", "_R1.fastq", "_R2.fastq"]:
+        if name.endswith(suffix):
+            return name[: -len(suffix)]
+    return ""
+
+
+def list_samples():
+    raw_dir = REPO_ROOT / "data" / "raw"
+    if not raw_dir.exists():
+        return []
+    sample_map = {}
+    for item in raw_dir.iterdir():
+        if not item.is_file() or not validate_fastq_name(item.name):
+            continue
+        sample = normalize_sample_from_filename(item.name)
+        if not sample:
+            continue
+        side = "R1" if "_R1." in item.name else "R2"
+        sample_map.setdefault(sample, set()).add(side)
+    return sorted(sample for sample, sides in sample_map.items() if {"R1", "R2"}.issubset(sides))
 
 
 def tool_versions():
@@ -69,16 +109,6 @@ def clamp_output(lines):
     return lines[-MAX_OUTPUT_LINES:]
 
 
-def list_samples():
-    raw_dir = REPO_ROOT / "data" / "raw"
-    if not raw_dir.exists():
-        return []
-    samples = set()
-    for item in raw_dir.glob("*_R1.fastq.gz"):
-        samples.add(item.name.replace("_R1.fastq.gz", ""))
-    return sorted(samples)
-
-
 def find_blast_path(sample):
     blast_dir = REPO_ROOT / "results" / "blast"
     if not sample or not blast_dir.exists():
@@ -93,10 +123,8 @@ def find_report_path(sample):
 
 
 def snapshot_run_artifacts(metadata):
-    action = metadata.get("action")
-    if action != "pipeline":
+    if metadata.get("action") != "pipeline":
         return metadata
-
     sample = metadata.get("sample")
     if not sample:
         return metadata
@@ -107,7 +135,6 @@ def snapshot_run_artifacts(metadata):
 
     paths = metadata.setdefault("paths", {})
     log_path = Path(paths.get("log", "")) if paths.get("log") else None
-
     if log_path and log_path.exists():
         target = run_dir / log_path.name
         shutil.copy2(log_path, target)
@@ -129,7 +156,6 @@ def snapshot_run_artifacts(metadata):
     run_json = run_dir / "run.json"
     run_json.write_text(json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8")
     paths["run_json"] = str(run_json.relative_to(REPO_ROOT))
-
     return metadata
 
 
@@ -153,18 +179,21 @@ def build_command(action, params):
         copy = params.get("copy") is True
         if not sample or not r1 or not r2:
             raise ValueError("Campos obrigatórios ausentes: sample, r1, r2")
-        cmd = [
-            "bash",
-            "scripts/00_import_sample.sh",
-            "--sample",
-            sample,
-            "--r1",
-            r1,
-            "--r2",
-            r2,
-        ]
+        cmd = ["bash", "scripts/00_import_sample.sh", "--sample", sample, "--r1", r1, "--r2", r2]
         if copy:
             cmd.append("--copy")
+        return cmd, {}
+    if action == "build_db":
+        target = params.get("target")
+        query = (params.get("query") or "").strip()
+        taxid = (params.get("taxid") or "").strip()
+        if not target:
+            raise ValueError("Campo obrigatório ausente: target")
+        cmd = ["bash", "scripts/10_build_viral_db.sh", "--target", target]
+        if query:
+            cmd += ["--query", query]
+        elif taxid:
+            cmd += ["--taxid", taxid]
         return cmd, {}
     if action == "pipeline":
         sample = params.get("sample")
@@ -172,14 +201,7 @@ def build_command(action, params):
             raise ValueError("Campo obrigatório ausente: sample")
         assembler = (params.get("assembler") or "velvet").lower()
         kmer = params.get("kmer") or "31"
-        cmd = [
-            "bash",
-            "scripts/20_run_pipeline.sh",
-            "--sample",
-            sample,
-            "--kmer",
-            str(kmer),
-        ]
+        cmd = ["bash", "scripts/20_run_pipeline.sh", "--sample", sample, "--kmer", str(kmer)]
         env = {}
         if assembler in {"velvet", "spades"}:
             env["ASSEMBLER"] = assembler
@@ -194,16 +216,13 @@ def run_job(job_id, action, params):
         env.update(extra_env)
     except ValueError as exc:
         with jobs_lock:
-            job = jobs[job_id]
-            job["status"] = "error"
-            job["output"] = [f"[ERRO] {exc}\n"]
-            job["returncode"] = 1
+            jobs[job_id].update({"status": "error", "output": [f"[ERRO] {exc}\n"], "returncode": 1})
         return
 
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
     now = datetime.now().strftime("%Y%m%d_%H%M%S")
-    sample = params.get("sample") or action
+    sample = params.get("sample") or params.get("target") or action
     log_name = f"ux_dashboard_{now}_{sanitize_token(action)}_{sanitize_token(sample)}.log"
     log_path = LOG_DIR / log_name
 
@@ -211,20 +230,9 @@ def run_job(job_id, action, params):
     pipeline_sample, assembler, kmer, threads = parse_pipeline_details(params)
 
     with jobs_lock:
-        jobs[job_id]["status"] = "running"
-        jobs[job_id]["command"] = " ".join(cmd)
-        jobs[job_id]["log_path"] = str(log_path.relative_to(REPO_ROOT))
+        jobs[job_id].update({"status": "running", "command": " ".join(cmd), "log_path": str(log_path.relative_to(REPO_ROOT))})
 
-    process = Popen(
-        cmd,
-        cwd=REPO_ROOT,
-        env=env,
-        stdout=PIPE,
-        stderr=STDOUT,
-        text=True,
-        bufsize=1,
-    )
-
+    process = Popen(cmd, cwd=REPO_ROOT, env=env, stdout=PIPE, stderr=STDOUT, text=True, bufsize=1)
     output_lines = []
     with log_path.open("w", encoding="utf-8") as log_file:
         if process.stdout:
@@ -263,12 +271,16 @@ def run_job(job_id, action, params):
     metadata = snapshot_run_artifacts(metadata)
 
     with jobs_lock:
-        jobs[job_id]["returncode"] = returncode
-        jobs[job_id]["status"] = "done" if returncode == 0 else "error"
-        jobs[job_id]["output"] = output_lines
-        jobs[job_id]["finished_at"] = end_epoch
-        jobs[job_id]["run"] = metadata
-        jobs[job_id]["tail"] = read_tail(log_path, lines=30) if returncode != 0 else ""
+        jobs[job_id].update(
+            {
+                "returncode": returncode,
+                "status": "done" if returncode == 0 else "error",
+                "output": output_lines,
+                "finished_at": end_epoch,
+                "run": metadata,
+                "tail": read_tail(log_path, lines=30) if returncode != 0 else "",
+            }
+        )
 
 
 def list_run_history():
@@ -278,8 +290,7 @@ def list_run_history():
             data = json.loads(run_json.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             continue
-        run_dir = run_json.parent.name
-        data["run_dir"] = run_dir
+        data["run_dir"] = run_json.parent.name
         runs.append(data)
     runs.sort(key=lambda item: item.get("end_epoch", 0), reverse=True)
     return runs
@@ -331,6 +342,60 @@ def serve_file(handler, filepath, content_type):
     handler.wfile.write(body)
 
 
+def import_uploaded_files(sample, r1_name, r1_data, r2_name, r2_data):
+    if not validate_fastq_name(r1_name) or not validate_fastq_name(r2_name):
+        raise ValueError("Extensão inválida (use .fastq ou .fastq.gz)")
+    if not r1_data:
+        raise ValueError("arquivo vazio: R1")
+    if not r2_data:
+        raise ValueError("arquivo vazio: R2")
+
+    raw_dir = REPO_ROOT / "data" / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    out_r1 = raw_dir / f"{sample}_R1.fastq.gz"
+    out_r2 = raw_dir / f"{sample}_R2.fastq.gz"
+
+    import gzip
+
+    if r1_name.endswith(".gz"):
+        out_r1.write_bytes(r1_data)
+    else:
+        with gzip.open(out_r1, "wb") as fh:
+            fh.write(r1_data)
+    if r2_name.endswith(".gz"):
+        out_r2.write_bytes(r2_data)
+    else:
+        with gzip.open(out_r2, "wb") as fh:
+            fh.write(r2_data)
+
+
+def import_zip_sample(sample, zip_bytes):
+    if not zip_bytes:
+        raise ValueError("arquivo vazio")
+
+    with zipfile.ZipFile(Path(REPO_ROOT / "tmp_upload.zip"), "w") as _:
+        pass
+    temp_zip = REPO_ROOT / f"tmp_upload_{uuid.uuid4().hex}.zip"
+    temp_zip.write_bytes(zip_bytes)
+
+    try:
+        with zipfile.ZipFile(temp_zip) as zf:
+            names = [n for n in zf.namelist() if not n.endswith("/")]
+            fastqs = [n for n in names if validate_fastq_name(n.lower())]
+            r1_candidates = [n for n in fastqs if "r1" in n.lower()]
+            r2_candidates = [n for n in fastqs if "r2" in n.lower()]
+            if not r1_candidates:
+                raise ValueError("R1 não encontrado no .zip")
+            if not r2_candidates:
+                raise ValueError("R2 não encontrado no .zip")
+
+            r1_name = r1_candidates[0]
+            r2_name = r2_candidates[0]
+            import_uploaded_files(sample, Path(r1_name).name, zf.read(r1_name), Path(r2_name).name, zf.read(r2_name))
+    finally:
+        temp_zip.unlink(missing_ok=True)
+
+
 class DashboardHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -342,18 +407,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return serve_file(self, DASHBOARD_DIR / "app.js", "application/javascript; charset=utf-8")
         if parsed.path == "/api/samples":
             return json_response(self, HTTPStatus.OK, {"samples": list_samples()})
+        if parsed.path == "/api/targets":
+            return json_response(self, HTTPStatus.OK, {"targets": list_targets()})
         if parsed.path == "/api/history":
             return json_response(self, HTTPStatus.OK, {"runs": list_run_history()})
         if parsed.path == "/api/history/file":
             query = parse_qs(parsed.query)
-            run_dir = (query.get("run") or [""])[0]
-            file_type = (query.get("type") or [""])[0]
-            target = resolve_history_file(run_dir, file_type)
+            target = resolve_history_file((query.get("run") or [""])[0], (query.get("type") or [""])[0])
             if not target:
                 return self.send_error(HTTPStatus.NOT_FOUND, "Arquivo do histórico não encontrado")
-            ctype = "text/plain; charset=utf-8"
-            if target.suffix == ".md":
-                ctype = "text/markdown; charset=utf-8"
+            ctype = "text/markdown; charset=utf-8" if target.suffix == ".md" else "text/plain; charset=utf-8"
             return serve_file(self, target, ctype)
         if parsed.path.startswith("/api/job/"):
             job_id = parsed.path.rsplit("/", 1)[-1]
@@ -361,77 +424,63 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 job = jobs.get(job_id)
             if not job:
                 return json_response(self, HTTPStatus.NOT_FOUND, {"error": "Job não encontrado"})
-            return json_response(
-                self,
-                HTTPStatus.OK,
-                {
-                    "id": job_id,
-                    "status": job.get("status"),
-                    "output": "".join(job.get("output", [])),
-                    "returncode": job.get("returncode"),
-                    "command": job.get("command"),
-                    "log_path": job.get("log_path"),
-                    "run": job.get("run"),
-                    "tail": job.get("tail", ""),
-                },
-            )
+            return json_response(self, HTTPStatus.OK, {"id": job_id, "status": job.get("status"), "output": "".join(job.get("output", [])), "returncode": job.get("returncode"), "command": job.get("command"), "log_path": job.get("log_path"), "run": job.get("run"), "tail": job.get("tail", "")})
         return self.send_error(HTTPStatus.NOT_FOUND, "Rota inválida")
 
     def do_POST(self):
         parsed = urlparse(self.path)
-        if parsed.path == "/api/history/rerun":
-            content_length = int(self.headers.get("Content-Length", 0))
-            if content_length <= 0:
-                return text_response(self, HTTPStatus.BAD_REQUEST, "Body vazio")
-            raw_body = self.rfile.read(content_length)
-            try:
-                payload = json.loads(raw_body)
-            except json.JSONDecodeError:
-                return text_response(self, HTTPStatus.BAD_REQUEST, "JSON inválido")
-            run_dir = payload.get("run_dir")
-            run_json = RUNS_DIR / str(run_dir) / "run.json"
-            if not run_json.exists():
-                return text_response(self, HTTPStatus.NOT_FOUND, "run.json não encontrado")
-            data = json.loads(run_json.read_text(encoding="utf-8"))
-            action = data.get("action", "pipeline")
-            params = data.get("params") or {}
-            return self.start_job(action, params)
-
-        if parsed.path != "/api/run":
-            return self.send_error(HTTPStatus.NOT_FOUND, "Rota inválida")
+        if parsed.path == "/api/import-upload":
+            return self.handle_upload_import()
 
         content_length = int(self.headers.get("Content-Length", 0))
         if content_length <= 0:
             return text_response(self, HTTPStatus.BAD_REQUEST, "Body vazio")
         raw_body = self.rfile.read(content_length)
-
         try:
             payload = json.loads(raw_body)
         except json.JSONDecodeError:
             return text_response(self, HTTPStatus.BAD_REQUEST, "JSON inválido")
 
-        action = payload.get("action")
-        params = payload.get("params") or {}
+        if parsed.path == "/api/history/rerun":
+            run_json = RUNS_DIR / str(payload.get("run_dir")) / "run.json"
+            if not run_json.exists():
+                return text_response(self, HTTPStatus.NOT_FOUND, "run.json não encontrado")
+            data = json.loads(run_json.read_text(encoding="utf-8"))
+            return self.start_job(data.get("action", "pipeline"), data.get("params") or {})
 
-        return self.start_job(action, params)
+        if parsed.path != "/api/run":
+            return self.send_error(HTTPStatus.NOT_FOUND, "Rota inválida")
+        return self.start_job(payload.get("action"), payload.get("params") or {})
+
+    def handle_upload_import(self):
+        import cgi
+
+        form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ={"REQUEST_METHOD": "POST", "CONTENT_TYPE": self.headers.get("Content-Type", "")})
+        sample = (form.getvalue("sample") or "").strip()
+        if not sample:
+            return text_response(self, HTTPStatus.BAD_REQUEST, "Campo obrigatório: sample")
+        try:
+            zip_file = form["zipfile"] if "zipfile" in form else None
+            r1_file = form["r1file"] if "r1file" in form else None
+            r2_file = form["r2file"] if "r2file" in form else None
+
+            if zip_file is not None and getattr(zip_file, "filename", ""):
+                import_zip_sample(sample, zip_file.file.read())
+            elif r1_file is not None and r2_file is not None and getattr(r1_file, "filename", "") and getattr(r2_file, "filename", ""):
+                import_uploaded_files(sample, r1_file.filename, r1_file.file.read(), r2_file.filename, r2_file.file.read())
+            else:
+                return text_response(self, HTTPStatus.BAD_REQUEST, "Envie R1/R2 ou arquivo .zip")
+        except (ValueError, zipfile.BadZipFile) as exc:
+            return text_response(self, HTTPStatus.BAD_REQUEST, str(exc))
+        return json_response(self, HTTPStatus.OK, {"message": f"Amostra importada: {sample}"})
 
     def start_job(self, action, params):
-        if action not in {"check_env", "demo", "import_sample", "pipeline"}:
+        if action not in {"check_env", "demo", "import_sample", "build_db", "pipeline"}:
             return text_response(self, HTTPStatus.BAD_REQUEST, "Ação inválida")
-
         job_id = uuid.uuid4().hex
         with jobs_lock:
-            jobs[job_id] = {
-                "status": "queued",
-                "created_at": time.time(),
-                "action": action,
-                "output": [],
-                "returncode": None,
-            }
-
-        thread = threading.Thread(target=run_job, args=(job_id, action, params), daemon=True)
-        thread.start()
-
+            jobs[job_id] = {"status": "queued", "created_at": time.time(), "action": action, "output": [], "returncode": None}
+        threading.Thread(target=run_job, args=(job_id, action, params), daemon=True).start()
         return json_response(self, HTTPStatus.OK, {"job_id": job_id})
 
     def log_message(self, format, *args):
@@ -440,8 +489,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
 def main():
     parser = argparse.ArgumentParser(description="Painel de uso para o pipeline Picornavirus-quali2026")
-    parser.add_argument("--host", default="0.0.0.0", help="Host para bind (padrão: 0.0.0.0)")
-    parser.add_argument("--port", default=8000, type=int, help="Porta do painel (padrão: 8000)")
+    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--port", default=8000, type=int)
     args = parser.parse_args()
 
     server = ThreadingHTTPServer((args.host, args.port), DashboardHandler)
