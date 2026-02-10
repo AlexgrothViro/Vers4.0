@@ -22,6 +22,9 @@ max_len="$(awk '
 ' "$CONTIGS" 2>/dev/null || echo 0)"
 hit_count="$(wc -l < "$BLAST" 2>/dev/null || echo 0)"
 
+ADJ_TSV="$(mktemp)"
+python3 "$(dirname "$0")/adj_identity.py" --blast "$BLAST" --contigs "$CONTIGS" --out "$ADJ_TSV"
+
 {
   echo "# Summary – $SAMPLE"
   echo
@@ -32,14 +35,16 @@ hit_count="$(wc -l < "$BLAST" 2>/dev/null || echo 0)"
   echo "## BLAST (vs PTV DB)"
   echo "- Hits (linhas TSV): ${hit_count}"
   echo
-  echo "### Top 5 hits (por bitscore)"
+  echo "### Top 5 hits (por adj_identity)"
   if [[ -s "$BLAST" ]]; then
     echo
-    echo "|qseqid|sseqid|pident|length|evalue|bitscore|"
-    echo "|---|---:|---:|---:|---:|---:|"
-    sort -k12,12gr "$BLAST" | head -n 5 | awk -F'\t' '{printf "|%s|%s|%s|%s|%s|%s|\n",$1,$2,$3,$4,$11,$12}'
+    echo "|qseqid|sseqid|pident|length|qlen|aln_cov|adj_identity|evalue|bitscore|"
+    echo "|---|---:|---:|---:|---:|---:|---:|---:|---:|"
+    tail -n +2 "$ADJ_TSV" | sort -t$'\t' -k9,9gr | head -n 5 | awk -F'\t' '{printf "|%s|%s|%s|%s|%s|%s|%s|%s|%s|\n",$1,$2,$3,$4,$7,$8,$9,$5,$6}'
   else
     echo "_Sem hits (arquivo BLAST vazio)_"
   fi
 } > "$OUT"
+
+rm -f "$ADJ_TSV"
 echo "[OK] Relatório: $OUT"

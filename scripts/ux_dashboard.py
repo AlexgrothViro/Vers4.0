@@ -2,23 +2,65 @@
 import argparse
 import json
 import os
+import re
+import shutil
 import threading
 import time
 import uuid
+from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from subprocess import Popen, PIPE, STDOUT
-from urllib.parse import urlparse
+from subprocess import PIPE, STDOUT, Popen, run
+from urllib.parse import parse_qs, urlparse
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DASHBOARD_DIR = REPO_ROOT / "dashboard"
 LOG_DIR = REPO_ROOT / "logs"
+RUNS_DIR = REPO_ROOT / "results" / "runs"
 
 MAX_OUTPUT_LINES = 4000
 
 jobs = {}
 jobs_lock = threading.Lock()
+
+
+def sanitize_token(text):
+    value = re.sub(r"[^A-Za-z0-9_.-]+", "_", (text or "unknown").strip())
+    return value[:80] or "unknown"
+
+
+def iso_now(epoch=None):
+    dt = datetime.fromtimestamp(epoch or time.time())
+    return dt.isoformat(timespec="seconds")
+
+
+def read_tail(path, lines=30):
+    try:
+        content = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except FileNotFoundError:
+        return "(log não encontrado)"
+    return "\n".join(content[-lines:])
+
+
+def tool_versions():
+    tools = {
+        "python": ["python3", "--version"],
+        "blastn": ["blastn", "-version"],
+        "bowtie2": ["bowtie2", "--version"],
+        "velveth": ["velveth", "--help"],
+        "spades": ["spades.py", "--version"],
+        "make": ["make", "--version"],
+    }
+    versions = {}
+    for name, cmd in tools.items():
+        try:
+            completed = run(cmd, cwd=REPO_ROOT, capture_output=True, text=True, check=False)
+            first = (completed.stdout or completed.stderr or "").splitlines()
+            versions[name] = first[0].strip() if first else "available"
+        except FileNotFoundError:
+            versions[name] = "not found"
+    return versions
 
 
 def clamp_output(lines):
@@ -35,6 +77,68 @@ def list_samples():
     for item in raw_dir.glob("*_R1.fastq.gz"):
         samples.add(item.name.replace("_R1.fastq.gz", ""))
     return sorted(samples)
+
+
+def find_blast_path(sample):
+    blast_dir = REPO_ROOT / "results" / "blast"
+    if not sample or not blast_dir.exists():
+        return None
+    preferred = sorted(blast_dir.glob(f"{sample}*_vs_db.tsv"), key=lambda p: p.stat().st_mtime, reverse=True)
+    return preferred[0] if preferred else None
+
+
+def find_report_path(sample):
+    report = REPO_ROOT / "results" / "reports" / f"{sample}_summary.md"
+    return report if sample and report.exists() else None
+
+
+def snapshot_run_artifacts(metadata):
+    action = metadata.get("action")
+    if action != "pipeline":
+        return metadata
+
+    sample = metadata.get("sample")
+    if not sample:
+        return metadata
+
+    ts = datetime.fromtimestamp(metadata.get("end_epoch", time.time())).strftime("%Y%m%d_%H%M%S")
+    run_dir = RUNS_DIR / f"{ts}_{sanitize_token(sample)}"
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    paths = metadata.setdefault("paths", {})
+    log_path = Path(paths.get("log", "")) if paths.get("log") else None
+
+    if log_path and log_path.exists():
+        target = run_dir / log_path.name
+        shutil.copy2(log_path, target)
+        paths["run_log"] = str(target.relative_to(REPO_ROOT))
+
+    blast_path = find_blast_path(sample)
+    if blast_path and blast_path.exists():
+        target = run_dir / blast_path.name
+        shutil.copy2(blast_path, target)
+        paths["run_blast"] = str(target.relative_to(REPO_ROOT))
+
+    report_path = find_report_path(sample)
+    if report_path and report_path.exists():
+        target = run_dir / report_path.name
+        shutil.copy2(report_path, target)
+        paths["run_report"] = str(target.relative_to(REPO_ROOT))
+
+    metadata["run_dir"] = run_dir.name
+    run_json = run_dir / "run.json"
+    run_json.write_text(json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8")
+    paths["run_json"] = str(run_json.relative_to(REPO_ROOT))
+
+    return metadata
+
+
+def parse_pipeline_details(params):
+    assembler = (params.get("assembler") or os.environ.get("ASSEMBLER") or "velvet").lower()
+    kmer = str(params.get("kmer") or "31")
+    sample = params.get("sample")
+    threads = str(os.environ.get("THREADS", "4"))
+    return sample, assembler, kmer, threads
 
 
 def build_command(action, params):
@@ -97,10 +201,19 @@ def run_job(job_id, action, params):
         return
 
     LOG_DIR.mkdir(parents=True, exist_ok=True)
+    RUNS_DIR.mkdir(parents=True, exist_ok=True)
+    now = datetime.now().strftime("%Y%m%d_%H%M%S")
+    sample = params.get("sample") or action
+    log_name = f"ux_dashboard_{now}_{sanitize_token(action)}_{sanitize_token(sample)}.log"
+    log_path = LOG_DIR / log_name
+
+    start_epoch = time.time()
+    pipeline_sample, assembler, kmer, threads = parse_pipeline_details(params)
 
     with jobs_lock:
         jobs[job_id]["status"] = "running"
         jobs[job_id]["command"] = " ".join(cmd)
+        jobs[job_id]["log_path"] = str(log_path.relative_to(REPO_ROOT))
 
     process = Popen(
         cmd,
@@ -113,20 +226,79 @@ def run_job(job_id, action, params):
     )
 
     output_lines = []
-    if process.stdout:
-        for line in process.stdout:
-            output_lines.append(line)
-            output_lines = clamp_output(output_lines)
-            with jobs_lock:
-                jobs[job_id]["output"] = output_lines
+    with log_path.open("w", encoding="utf-8") as log_file:
+        if process.stdout:
+            for line in process.stdout:
+                log_file.write(line)
+                log_file.flush()
+                output_lines.append(line)
+                output_lines = clamp_output(output_lines)
+                with jobs_lock:
+                    jobs[job_id]["output"] = output_lines
 
     returncode = process.wait()
+    end_epoch = time.time()
+
+    metadata = {
+        "id": job_id,
+        "action": action,
+        "sample": pipeline_sample or params.get("sample"),
+        "assembler": assembler if action == "pipeline" else None,
+        "kmer": kmer if action == "pipeline" else None,
+        "threads": threads if action == "pipeline" else None,
+        "command": " ".join(cmd),
+        "start": iso_now(start_epoch),
+        "end": iso_now(end_epoch),
+        "start_epoch": start_epoch,
+        "end_epoch": end_epoch,
+        "exit_code": returncode,
+        "params": params,
+        "versions": tool_versions() if action == "pipeline" else {},
+        "paths": {
+            "log": str(log_path.relative_to(REPO_ROOT)),
+            "report": str(find_report_path(pipeline_sample).relative_to(REPO_ROOT)) if find_report_path(pipeline_sample) else None,
+            "blast": str(find_blast_path(pipeline_sample).relative_to(REPO_ROOT)) if find_blast_path(pipeline_sample) else None,
+        },
+    }
+    metadata = snapshot_run_artifacts(metadata)
 
     with jobs_lock:
         jobs[job_id]["returncode"] = returncode
         jobs[job_id]["status"] = "done" if returncode == 0 else "error"
         jobs[job_id]["output"] = output_lines
-        jobs[job_id]["finished_at"] = time.time()
+        jobs[job_id]["finished_at"] = end_epoch
+        jobs[job_id]["run"] = metadata
+        jobs[job_id]["tail"] = read_tail(log_path, lines=30) if returncode != 0 else ""
+
+
+def list_run_history():
+    runs = []
+    for run_json in RUNS_DIR.glob("*/run.json"):
+        try:
+            data = json.loads(run_json.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        run_dir = run_json.parent.name
+        data["run_dir"] = run_dir
+        runs.append(data)
+    runs.sort(key=lambda item: item.get("end_epoch", 0), reverse=True)
+    return runs
+
+
+def resolve_history_file(run_dir, file_type):
+    run_path = RUNS_DIR / run_dir
+    run_json = run_path / "run.json"
+    if not run_json.exists():
+        return None
+    data = json.loads(run_json.read_text(encoding="utf-8"))
+    key_map = {"report": "run_report", "log": "run_log", "blast": "run_blast"}
+    relpath = data.get("paths", {}).get(key_map.get(file_type, ""))
+    if not relpath:
+        return None
+    target = REPO_ROOT / relpath
+    if not target.exists() or run_path not in target.parents:
+        return None
+    return target
 
 
 def json_response(handler, status, payload):
@@ -170,6 +342,19 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return serve_file(self, DASHBOARD_DIR / "app.js", "application/javascript; charset=utf-8")
         if parsed.path == "/api/samples":
             return json_response(self, HTTPStatus.OK, {"samples": list_samples()})
+        if parsed.path == "/api/history":
+            return json_response(self, HTTPStatus.OK, {"runs": list_run_history()})
+        if parsed.path == "/api/history/file":
+            query = parse_qs(parsed.query)
+            run_dir = (query.get("run") or [""])[0]
+            file_type = (query.get("type") or [""])[0]
+            target = resolve_history_file(run_dir, file_type)
+            if not target:
+                return self.send_error(HTTPStatus.NOT_FOUND, "Arquivo do histórico não encontrado")
+            ctype = "text/plain; charset=utf-8"
+            if target.suffix == ".md":
+                ctype = "text/markdown; charset=utf-8"
+            return serve_file(self, target, ctype)
         if parsed.path.startswith("/api/job/"):
             job_id = parsed.path.rsplit("/", 1)[-1]
             with jobs_lock:
@@ -185,12 +370,33 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     "output": "".join(job.get("output", [])),
                     "returncode": job.get("returncode"),
                     "command": job.get("command"),
+                    "log_path": job.get("log_path"),
+                    "run": job.get("run"),
+                    "tail": job.get("tail", ""),
                 },
             )
         return self.send_error(HTTPStatus.NOT_FOUND, "Rota inválida")
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        if parsed.path == "/api/history/rerun":
+            content_length = int(self.headers.get("Content-Length", 0))
+            if content_length <= 0:
+                return text_response(self, HTTPStatus.BAD_REQUEST, "Body vazio")
+            raw_body = self.rfile.read(content_length)
+            try:
+                payload = json.loads(raw_body)
+            except json.JSONDecodeError:
+                return text_response(self, HTTPStatus.BAD_REQUEST, "JSON inválido")
+            run_dir = payload.get("run_dir")
+            run_json = RUNS_DIR / str(run_dir) / "run.json"
+            if not run_json.exists():
+                return text_response(self, HTTPStatus.NOT_FOUND, "run.json não encontrado")
+            data = json.loads(run_json.read_text(encoding="utf-8"))
+            action = data.get("action", "pipeline")
+            params = data.get("params") or {}
+            return self.start_job(action, params)
+
         if parsed.path != "/api/run":
             return self.send_error(HTTPStatus.NOT_FOUND, "Rota inválida")
 
@@ -206,6 +412,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         action = payload.get("action")
         params = payload.get("params") or {}
+
+        return self.start_job(action, params)
+
+    def start_job(self, action, params):
         if action not in {"check_env", "demo", "import_sample", "pipeline"}:
             return text_response(self, HTTPStatus.BAD_REQUEST, "Ação inválida")
 

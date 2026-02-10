@@ -70,6 +70,35 @@ main {
   padding: 2rem 6vw 3rem;
 }
 
+.tabs {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.tab {
+  border: 1px solid #c6d2e5;
+  background: #fff;
+  color: #1f3b5d;
+  padding: 0.6rem 1rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.tab.active {
+  background: #1f6aa5;
+  color: #fff;
+  border-color: #1f6aa5;
+}
+
+.tab-panel {
+  display: none;
+  gap: 1.5rem;
+}
+
+.tab-panel.active {
+  display: grid;
+}
+
 .card {
   background: #fff;
   border-radius: 16px;
@@ -149,6 +178,37 @@ button.primary:hover {
   color: #5a6172;
 }
 
+.final-status {
+  margin-bottom: 1rem;
+  padding: 0.8rem 1rem;
+  border-radius: 10px;
+  display: none;
+}
+
+.final-status.ok,
+.final-status.error {
+  display: block;
+}
+
+.final-status.ok {
+  background: #edf9f1;
+  border: 1px solid #5ba96e;
+  color: #184f2a;
+}
+
+.final-status.error {
+  background: #fff1f1;
+  border: 1px solid #d96b6b;
+  color: #7e1f1f;
+}
+
+.final-status pre {
+  white-space: pre-wrap;
+  margin: 0.6rem 0 0;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
 .log {
   background: #0f1928;
   color: #e7edf7;
@@ -158,6 +218,59 @@ button.primary:hover {
   max-height: 320px;
   overflow-y: auto;
   font-size: 0.85rem;
+}
+
+.history-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.history-item {
+  border: 1px solid #e2e8f5;
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.history-item header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.history-item h3 {
+  margin: 0;
+}
+
+.badge {
+  font-size: 0.78rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.badge.ok {
+  background: #edf9f1;
+  color: #22663b;
+}
+
+.badge.error {
+  background: #fff1f1;
+  color: #942b2b;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.actions button {
+  border: 1px solid #cdd8ea;
+  background: #fff;
+  padding: 0.45rem 0.75rem;
+  border-radius: 9px;
+  cursor: pointer;
 }
 
 footer {
