@@ -4,12 +4,27 @@ const outputEl = document.getElementById("job-output");
 const samplesDatalist = document.getElementById("samples");
 const finalStatusEl = document.getElementById("final-status");
 const historyListEl = document.getElementById("history-list");
+const pipelineProgressEl = document.getElementById("pipeline-progress");
+const reportViewerEl = document.getElementById("report-viewer");
+const reportContentEl = document.getElementById("report-content");
+
+const stageConfig = {
+  host: { marker: "[3/6]", label: "Remoção de hospedeiro" },
+  assembly: { marker: "[4/6]", label: "Montagem" },
+  blast: { marker: "[5/6]", label: "BLAST" },
+};
+
+const stageIcon = {
+  pending: "⏳",
+  running: "🔄",
+  done: "✅",
+  error: "❌",
+  skipped: "⏭️",
+};
 
 const setStatus = (status, action) => {
   statusEl.textContent = status;
-  if (action) {
-    actionEl.textContent = action;
-  }
+  if (action) actionEl.textContent = action;
 };
 
 const setOutput = (text) => {
@@ -27,12 +42,58 @@ const setFinalStatus = (html, tone = "") => {
   finalStatusEl.innerHTML = html || "";
 };
 
+const setReportContent = (content) => {
+  reportContentEl.textContent = content || "";
+  reportViewerEl.hidden = !content;
+};
+
+const initPipelineProgress = () => {
+  pipelineProgressEl.querySelectorAll("li[data-stage]").forEach((item) => {
+    item.dataset.state = "pending";
+    item.querySelector(".stage-icon").textContent = stageIcon.pending;
+  });
+};
+
+const showPipelineProgress = (show) => {
+  pipelineProgressEl.hidden = !show;
+  if (show) initPipelineProgress();
+};
+
+const applyStageState = (stage, state) => {
+  const item = pipelineProgressEl.querySelector(`li[data-stage="${stage}"]`);
+  if (!item) return;
+  item.dataset.state = state;
+  item.querySelector(".stage-icon").textContent = stageIcon[state] || stageIcon.pending;
+};
+
+const updatePipelineProgressFromOutput = (output, jobStatus) => {
+  const hasHost = output.includes(stageConfig.host.marker);
+  const hasAssembly = output.includes(stageConfig.assembly.marker);
+  const hasBlast = output.includes(stageConfig.blast.marker);
+  const skippedHost = output.includes("[AVISO] Índice do hospedeiro não encontrado");
+
+  applyStageState("host", skippedHost ? "skipped" : (hasHost ? "done" : "pending"));
+  applyStageState("assembly", hasAssembly ? "done" : (hasHost || skippedHost ? "running" : "pending"));
+  applyStageState("blast", hasBlast ? "running" : "pending");
+
+  if (jobStatus === "done") {
+    applyStageState("blast", "done");
+  }
+  if (jobStatus === "error") {
+    if (hasBlast) {
+      applyStageState("blast", "error");
+    } else if (hasAssembly) {
+      applyStageState("assembly", "error");
+    } else if (hasHost || skippedHost) {
+      applyStageState("host", "error");
+    }
+  }
+};
+
 const fetchSamples = async () => {
   try {
     const response = await fetch("/api/samples");
-    if (!response.ok) {
-      return;
-    }
+    if (!response.ok) return;
     const data = await response.json();
     samplesDatalist.innerHTML = "";
     data.samples.forEach((sample) => {
@@ -47,6 +108,24 @@ const fetchSamples = async () => {
 
 const openRunArtifact = (runDir, fileType) => {
   window.open(`/api/history/file?run=${encodeURIComponent(runDir)}&type=${encodeURIComponent(fileType)}`, "_blank");
+};
+
+const loadReportInline = async (runDir) => {
+  if (!runDir) {
+    setReportContent("");
+    return;
+  }
+  try {
+    const response = await fetch(`/api/history/file?run=${encodeURIComponent(runDir)}&type=report`);
+    if (!response.ok) {
+      setReportContent("");
+      return;
+    }
+    setReportContent(await response.text());
+  } catch (err) {
+    console.error("Falha ao carregar resumo", err);
+    setReportContent("");
+  }
 };
 
 const rerunHistory = async (runDir) => {
@@ -64,13 +143,12 @@ const rerunHistory = async (runDir) => {
   setStatus("Executando...", `rerun:${runDir}`);
   setOutput("");
   setFinalStatus("");
+  setReportContent("");
+  showPipelineProgress(true);
   pollJob(jobId, `rerun:${runDir}`);
 };
 
-const formatDate = (value) => {
-  if (!value) return "-";
-  return value.replace("T", " ");
-};
+const formatDate = (value) => (value ? value.replace("T", " ") : "-");
 
 const renderHistory = (runs) => {
   if (!runs.length) {
@@ -113,9 +191,7 @@ const renderHistory = (runs) => {
 const fetchHistory = async () => {
   try {
     const response = await fetch("/api/history");
-    if (!response.ok) {
-      return;
-    }
+    if (!response.ok) return;
     const data = await response.json();
     renderHistory(data.runs || []);
   } catch (err) {
@@ -127,12 +203,12 @@ const runAction = async (action, params = {}) => {
   setStatus("Executando...", action);
   setOutput("");
   setFinalStatus("");
+  setReportContent("");
+  showPipelineProgress(action === "pipeline");
 
   const response = await fetch("/api/run", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action, params }),
   });
 
@@ -156,21 +232,29 @@ const pollJob = (jobId, action) => {
       return;
     }
     const data = await response.json();
-    setOutput(data.output || "");
+    const output = data.output || "";
+    setOutput(output);
 
-    if (data.status === "running") {
+    if ((action === "pipeline" || action.startsWith("rerun:")) && data.status !== "queued") {
+      showPipelineProgress(true);
+      updatePipelineProgressFromOutput(output, data.status);
+    } else {
+      showPipelineProgress(false);
+    }
+
+    if (data.status === "running" || data.status === "queued") {
       setStatus("Executando...", action);
       return;
     }
 
     if (data.status === "done") {
       setStatus("Concluído", action);
-      const report = data.run?.paths?.run_report;
       const runDir = data.run?.run_dir || "";
-      const reportLink = report && runDir
+      const reportLink = runDir
         ? `<a href="/api/history/file?run=${encodeURIComponent(runDir)}&type=report" target="_blank">Abrir report</a>`
         : "Report indisponível";
       setFinalStatus(`<strong>SUCESSO</strong> ✅ ${reportLink}`, "ok");
+      await loadReportInline(runDir);
     } else {
       setStatus("Falhou", action);
       const tail = data.tail || "Sem log disponível.";
@@ -185,10 +269,7 @@ const pollJob = (jobId, action) => {
 
 const bindButtons = () => {
   document.querySelectorAll("button[data-action]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const action = button.dataset.action;
-      runAction(action);
-    });
+    button.addEventListener("click", () => runAction(button.dataset.action));
   });
 
   const importForm = document.getElementById("import-form");
@@ -220,9 +301,7 @@ const bindButtons = () => {
       document.querySelectorAll(".tab-panel").forEach((panel) => panel.classList.remove("active"));
       tab.classList.add("active");
       document.getElementById(tab.dataset.tab).classList.add("active");
-      if (tab.dataset.tab === "tab-historico") {
-        fetchHistory();
-      }
+      if (tab.dataset.tab === "tab-historico") fetchHistory();
     });
   });
 };
@@ -231,4 +310,6 @@ window.addEventListener("load", () => {
   bindButtons();
   fetchSamples();
   fetchHistory();
+  showPipelineProgress(false);
+  setReportContent("");
 });

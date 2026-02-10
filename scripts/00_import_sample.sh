@@ -17,6 +17,23 @@ R1=""
 R2=""
 MODE="link"
 
+normalize_windows_path() {
+  local raw="$1"
+  # Remove aspas externas eventualmente passadas pelo usuário/copiar-colar.
+  raw="${raw%\"}"
+  raw="${raw#\"}"
+  raw="${raw%$'\r'}"
+
+  if [[ "$raw" =~ ^[A-Za-z]:\\ ]]; then
+    if command -v wslpath >/dev/null 2>&1; then
+      wslpath -u -- "$raw"
+      return
+    fi
+  fi
+
+  printf '%s\n' "$raw"
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --sample) SAMPLE="${2:-}"; shift 2;;
@@ -30,11 +47,9 @@ done
 
 [[ -n "$SAMPLE" && -n "$R1" && -n "$R2" ]] || { echo "[ERRO] faltou --sample/--r1/--r2"; usage; exit 2; }
 
-# Windows -> WSL se necessário
-if command -v wslpath >/dev/null 2>&1; then
-  [[ "$R1" =~ ^[A-Za-z]:\\ ]] && R1="$(wslpath -u "$R1")"
-  [[ "$R2" =~ ^[A-Za-z]:\\ ]] && R2="$(wslpath -u "$R2")"
-fi
+# Windows -> WSL se necessário (inclui caminhos com espaços)
+R1="$(normalize_windows_path "$R1")"
+R2="$(normalize_windows_path "$R2")"
 
 mkdir -p data/raw
 
