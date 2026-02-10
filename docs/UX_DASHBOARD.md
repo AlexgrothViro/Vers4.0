@@ -8,6 +8,8 @@ com acesso via navegador do Windows.
 No WSL, dentro do repositório:
 
 ```bash
+make fix-wsl
+make deps
 make dashboard
 ```
 
@@ -24,6 +26,15 @@ hostname -I
 
 > O terminal deve permanecer aberto enquanto o painel estiver em uso.
 
+## 1.1. Checklist rápido de instalação
+
+1. **WSL/Ubuntu instalado** (Windows).
+2. **Repositório clonado** no WSL.
+3. **Dependências instaladas** via `make deps`.
+4. **Painel rodando** via `make dashboard`.
+
+Se alguma etapa falhar, veja “Observações importantes” ao final deste documento.
+
 ## 2. O que o painel faz
 
 O painel oferece quatro ações principais:
@@ -38,3 +49,28 @@ O painel oferece quatro ações principais:
 - **SPAdes** só é usado quando `config.env` estiver presente e `ASSEMBLER=spades`.
 - Logs ficam em `logs/ux_dashboard_*.log` (ignorados pelo git).
 - Caso precise parar o painel, use `Ctrl+C` no terminal.
+
+## 4. Dicas de uso no Windows (WSL)
+
+### 4.1. Caminhos de arquivos FASTQ
+
+Para arquivos que estão no Windows, use caminhos do WSL, por exemplo:
+
+```
+/mnt/c/Users/SEU_USUARIO/Downloads/minha_amostra_R1.fastq.gz
+```
+
+### 4.2. Se o `localhost` não abrir
+
+Use o IP retornado por:
+
+```bash
+hostname -I
+```
+
+E acesse no navegador: `http://<IP_DO_WSL>:8787`.
+
+### 4.3. Se `make deps` falhar
+
+Geralmente é bloqueio de rede/proxy. Ajuste o proxy do `apt-get` ou instale
+as dependências manualmente e rode `make test-env` para validar.
