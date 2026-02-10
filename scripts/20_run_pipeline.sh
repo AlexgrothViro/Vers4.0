@@ -96,17 +96,18 @@ else
   if [[ -n "$SAMPLE_R1" ]]; then
     SAMPLE_R1="$(resolve_path "$SAMPLE_R1")"
   else
-    SAMPLE_R1="${RAW_DIR}/${SAMPLE_ID}_R1.fastq.gz"
+    SAMPLE_R1="${RAW_DIR}/${SAMPLE_NAME}_R1.fastq.gz"
   fi
 
   if [[ -n "$SAMPLE_R2" ]]; then
     SAMPLE_R2="$(resolve_path "$SAMPLE_R2")"
   else
-    SAMPLE_R2="${RAW_DIR}/${SAMPLE_ID}_R2.fastq.gz"
+    SAMPLE_R2="${RAW_DIR}/${SAMPLE_NAME}_R2.fastq.gz"
   fi
 fi
+  SAMPLE_ID="-e"
 
-export SAMPLE_ID SAMPLE_NAME SAMPLE_R1 SAMPLE_R2 SAMPLE_SINGLE RAW_DIR
+  export SAMPLE_ID SAMPLE_NAME SAMPLE_R1 SAMPLE_R2 SAMPLE_SINGLE RAW_DIR
 
 # --- Preflight: garantir FASTQs da amostra ---
 RAW_DIR="${REPO_ROOT}/data/raw"
