@@ -25,6 +25,14 @@ hit_count="$(wc -l < "$BLAST" 2>/dev/null || echo 0)"
 ADJ_TSV="$(mktemp)"
 python3 "$(dirname "$0")/adj_identity.py" --blast "$BLAST" --contigs "$CONTIGS" --out "$ADJ_TSV"
 
+best_adj="$(tail -n +2 "$ADJ_TSV" | sort -t$'	' -k9,9gr | head -n 1 | awk -F'	' '{printf "%s|%s",$1,$9}')"
+best_adj_qseqid="${best_adj%%|*}"
+best_adj_value="${best_adj#*|}"
+if [[ "$best_adj" == "" || "$best_adj" == "$best_adj_value" ]]; then
+  best_adj_qseqid="-"
+  best_adj_value="-"
+fi
+
 {
   echo "# Summary – $SAMPLE"
   echo
@@ -34,6 +42,7 @@ python3 "$(dirname "$0")/adj_identity.py" --blast "$BLAST" --contigs "$CONTIGS" 
   echo
   echo "## BLAST (vs PTV DB)"
   echo "- Hits (linhas TSV): ${hit_count}"
+  echo "- Melhor adj_identity: ${best_adj_value} (contig: ${best_adj_qseqid})"
   echo
   echo "### Top 5 hits (por adj_identity)"
   if [[ -s "$BLAST" ]]; then

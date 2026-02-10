@@ -2,14 +2,14 @@
 set -euo pipefail
 
 usage() {
-  cat <<EOF
+  cat <<EOF_INNER
 Uso:
   bash scripts/00_import_sample.sh --sample NOME --r1 CAMINHO --r2 CAMINHO [--copy]
 
 Faz symlink (padrão) ou cópia para:
   data/raw/NOME_R1.fastq.gz
   data/raw/NOME_R2.fastq.gz
-EOF
+EOF_INNER
 }
 
 SAMPLE=""
@@ -19,21 +19,31 @@ MODE="link"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --sample) SAMPLE="${2:-}"; shift 2;;
-    --r1) R1="${2:-}"; shift 2;;
-    --r2) R2="${2:-}"; shift 2;;
-    --copy) MODE="copy"; shift 1;;
-    -h|--help) usage; exit 0;;
-    *) echo "[ERRO] argumento inválido: $1"; usage; exit 2;;
+    --sample) SAMPLE="${2:-}"; shift 2 ;;
+    --r1) R1="${2:-}"; shift 2 ;;
+    --r2) R2="${2:-}"; shift 2 ;;
+    --copy) MODE="copy"; shift 1 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "[ERRO] argumento inválido: $1"; usage; exit 2 ;;
   esac
 done
 
 [[ -n "$SAMPLE" && -n "$R1" && -n "$R2" ]] || { echo "[ERRO] faltou --sample/--r1/--r2"; usage; exit 2; }
 
+normalize_user_path() {
+  local raw="$1"
+  raw="${raw%\"}"
+  raw="${raw#\"}"
+  echo "$raw"
+}
+
+R1="$(normalize_user_path "$R1")"
+R2="$(normalize_user_path "$R2")"
+
 # Windows -> WSL se necessário
 if command -v wslpath >/dev/null 2>&1; then
-  [[ "$R1" =~ ^[A-Za-z]:\\ ]] && R1="$(wslpath -u "$R1")"
-  [[ "$R2" =~ ^[A-Za-z]:\\ ]] && R2="$(wslpath -u "$R2")"
+  [[ "$R1" =~ ^[A-Za-z]:\\ ]] && R1="$(wslpath -u -- "$R1")"
+  [[ "$R2" =~ ^[A-Za-z]:\\ ]] && R2="$(wslpath -u -- "$R2")"
 fi
 
 mkdir -p data/raw

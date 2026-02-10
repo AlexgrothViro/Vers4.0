@@ -117,7 +117,19 @@
               <strong id="job-action">-</strong>
             </div>
           </div>
+          <div id="pipeline-progress" class="pipeline-progress hidden" aria-live="polite">
+            <h3>Etapas do pipeline</h3>
+            <ul>
+              <li data-step="host_filter"><span class="step-icon">⚪</span> Remoção de hospedeiro</li>
+              <li data-step="assembly"><span class="step-icon">⚪</span> Montagem</li>
+              <li data-step="blast"><span class="step-icon">⚪</span> BLAST</li>
+            </ul>
+          </div>
           <div id="final-status" class="final-status"></div>
+          <article id="report-preview" class="report-preview hidden">
+            <h3>Preview do relatório (results/reports/DEMO_summary.md)</h3>
+            <pre id="report-content"></pre>
+          </article>
           <pre id="job-output" class="log"></pre>
         </section>
       </section>

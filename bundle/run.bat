@@ -11,6 +11,17 @@ if errorlevel 1 (
   exit /b 1
 )
 
+for /f "tokens=2 delims=:" %%i in ('dism.exe /online /Get-FeatureInfo /FeatureName:Microsoft-Windows-Subsystem-Linux ^| findstr /i "State"') do set "WSL_FEATURE_STATE=%%i"
+if defined WSL_FEATURE_STATE (
+  set "WSL_FEATURE_STATE=!WSL_FEATURE_STATE: =!"
+  if /i not "!WSL_FEATURE_STATE!"=="Enabled" (
+    echo [ERRO] O recurso "Windows Subsystem for Linux" nao esta habilitado.
+    echo [DICA] Abra o PowerShell como Administrador e execute: wsl --install
+    echo [DICA] Reinicie o computador e tente novamente.
+    exit /b 1
+  )
+)
+
 set "WSL_DISTRO=%WSL_DISTRO%"
 if not defined WSL_DISTRO set "WSL_DISTRO=Ubuntu"
 

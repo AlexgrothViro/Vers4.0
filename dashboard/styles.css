@@ -209,6 +209,74 @@ button.primary:hover {
   overflow-y: auto;
 }
 
+.hidden {
+  display: none !important;
+}
+
+.pipeline-progress {
+  margin-bottom: 1rem;
+  border: 1px solid #d8e2f0;
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  background: #f8fbff;
+}
+
+.pipeline-progress h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.pipeline-progress ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.pipeline-progress li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: #45536b;
+}
+
+.pipeline-progress li.running {
+  color: #1f6aa5;
+}
+
+.pipeline-progress li.done {
+  color: #1f7a3e;
+}
+
+.pipeline-progress li.error {
+  color: #a12222;
+}
+
+.report-preview {
+  margin-bottom: 1rem;
+  border: 1px solid #d8e2f0;
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  background: #fbfcff;
+}
+
+.report-preview h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.report-preview pre {
+  margin: 0;
+  white-space: pre-wrap;
+  max-height: 260px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e5ecf6;
+  padding: 0.75rem;
+  border-radius: 8px;
+}
+
 .log {
   background: #0f1928;
   color: #e7edf7;
