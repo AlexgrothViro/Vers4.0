@@ -11,6 +11,14 @@ if errorlevel 1 (
   exit /b 1
 )
 
+wsl.exe --status >nul 2>nul
+if errorlevel 1 (
+  echo [ERRO] O recurso WSL parece desabilitado neste Windows.
+  echo         Habilite "Subsistema do Windows para Linux" e reinicie a maquina.
+  echo         Guia rapido (PowerShell como Admin): wsl --install
+  exit /b 1
+)
+
 set "WSL_DISTRO=%WSL_DISTRO%"
 if not defined WSL_DISTRO set "WSL_DISTRO=Ubuntu"
 

@@ -24,6 +24,10 @@ hit_count="$(wc -l < "$BLAST" 2>/dev/null || echo 0)"
 
 ADJ_TSV="$(mktemp)"
 python3 "$(dirname "$0")/adj_identity.py" --blast "$BLAST" --contigs "$CONTIGS" --out "$ADJ_TSV"
+top_adj_summary=""
+if [[ -s "$ADJ_TSV" ]]; then
+  top_adj_summary="$(tail -n +2 "$ADJ_TSV" | sort -t$'\t' -k9,9gr | head -n 1 | awk -F'\t' '{printf "%s vs %s | adj_identity=%s%% | cobertura=%s%%",$1,$2,$9,$8}')"
+fi
 
 {
   echo "# Summary – $SAMPLE"
@@ -34,6 +38,9 @@ python3 "$(dirname "$0")/adj_identity.py" --blast "$BLAST" --contigs "$CONTIGS" 
   echo
   echo "## BLAST (vs PTV DB)"
   echo "- Hits (linhas TSV): ${hit_count}"
+  if [[ -n "$top_adj_summary" ]]; then
+    echo "- Melhor identidade ajustada: ${top_adj_summary}"
+  fi
   echo
   echo "### Top 5 hits (por adj_identity)"
   if [[ -s "$BLAST" ]]; then

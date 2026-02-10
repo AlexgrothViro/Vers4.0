@@ -117,8 +117,20 @@
               <strong id="job-action">-</strong>
             </div>
           </div>
+          <div class="pipeline-progress" id="pipeline-progress" hidden>
+            <h3>Etapas do pipeline</h3>
+            <ul>
+              <li data-stage="host"><span class="stage-icon">⏳</span> Remoção de hospedeiro</li>
+              <li data-stage="assembly"><span class="stage-icon">⏳</span> Montagem</li>
+              <li data-stage="blast"><span class="stage-icon">⏳</span> BLAST</li>
+            </ul>
+          </div>
           <div id="final-status" class="final-status"></div>
           <pre id="job-output" class="log"></pre>
+          <div class="report-viewer" id="report-viewer" hidden>
+            <h3>Resumo do resultado (results/reports/*_summary.md)</h3>
+            <pre id="report-content" class="report-content"></pre>
+          </div>
         </section>
       </section>
 
