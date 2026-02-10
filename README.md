@@ -108,7 +108,18 @@ Para alterar a query NCBI:
 make db DB=ptv DB_QUERY='"Teschovirus"[Organism] AND "complete genome"[Title]'
 ```
 
-Os arquivos padrão são:
-- FASTA: `data/ref/<DB>.fa`
-- BLAST DB: `blastdb/<DB>`
-- Bowtie2: `bowtie2/<DB>`
+Se existir `config.env`, ele é usado como base (ex.: `ASSEMBLER=spades`, `VELVET_K`, `THREADS`). Também dá para chamar via `make pipeline`.
+
+---
+
+## 5. Painel de uso (UX)
+
+Para facilitar a execução por usuários não técnicos, existe um painel web simples. Dentro do WSL:
+
+```bash
+make ux
+```
+
+Depois, no Windows, acesse: `http://localhost:8000`.
+
+O painel permite checar o ambiente, gerar DEMO, importar amostras e rodar o pipeline (Velvet por padrão, SPAdes opcional). Consulte detalhes em `docs/PAINEL_UX.md`.

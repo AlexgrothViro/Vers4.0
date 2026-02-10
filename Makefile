@@ -22,7 +22,7 @@ BLAST_DB      ?= blastdb/ptv
 BOWTIE2_INDEX ?= bowtie2/ptv
 
 .PHONY: help setup_dirs deps test-env filter-host test-velvet test-blast \
-	ptv-fasta ptv-fasta-legacy blastdb bowtie2-index pipeline test clean fix-wsl \
+  ptv-fasta ptv-fasta-legacy blastdb bowtie2-index pipeline test clean fix-wsl \
 	db db-list sample-add run
 
 -include config/picornavirus.env
@@ -44,7 +44,8 @@ cfg-blast:
 help:
 	@echo "Alvos disponíveis:"
 	@echo "  make deps                  # instala dependências (apt-get) e roda check de ambiente"
-	@echo "  make setup_dirs             # cria estrutura básica (data/, results/, docs/)"
+	@echo "  make setup_dirs             # cria estrutura básica (data/, results/, docs/)
+	@echo "  make demo                  # gera FASTQ demo reprodutível em data/raw (DEMO_R1/R2)"
 	@echo "  make ptv-fasta              # baixa/gera FASTA de PTV em $(REF_FASTA)"
 	@echo "  make ptv-fasta-legacy       # cria symlink data/ptv_db.fa -> $(REF_FASTA)"
 	@echo "  make blastdb                # gera banco BLAST em $(BLAST_DB) (usa $(REF_FASTA))"
@@ -59,6 +60,7 @@ help:
 	@echo "  make test                   # roda smoke test (prep + 90_smoke_test.sh)"
 	@echo "  make filter-host/test-velvet/test-blast # alvos individuais legados"
 	@echo "  make clean                  # remove artefatos gerados (blastdb, bowtie2, run_T1, logs/tmp/results)"
+	@echo "  make ux                     # inicia o painel web local"
 	@echo
 	@echo "Variáveis úteis:"
 	@echo "  REF_FASTA=$(REF_FASTA)"
@@ -111,7 +113,7 @@ bowtie2-index: ptv-fasta
 	fi
 
 pipeline:
-	$(SCRIPTS_DIR)/20_run_pipeline.sh
+	BLAST_DB="$(BLAST_DB)" BOWTIE2_INDEX="$(BOWTIE2_INDEX)" scripts/20_run_pipeline.sh --sample "$(SAMPLE)"
 
 db:
 	DB="$(DB)" DB_QUERY="$(DB_QUERY)" REF_FASTA="$(REF_FASTA)" \
@@ -155,6 +157,11 @@ smoke-test: test-env ptv-fasta-legacy blastdb bowtie2-index
 
 test: smoke-test
 
+
+.PHONY: test-demo
+test-demo:
+	bash scripts/91_verify_demo_outputs.sh "$(SAMPLE)"
+
 clean:
 	rm -rf run_T1 blastdb bowtie2 results logs tmp
 # ---- PTV-enriched (Bowtie2 -> Velvet -> BLAST -> hits -> MAFFT addfragments) ----
@@ -176,3 +183,74 @@ test-bundle-wsl:
 	bash scripts/99_test_bundle_wsl.sh "$(BUNDLE_TAG)"
 
 test-all: test test-bundle-wsl
+# ---- DB convenience targets ----
+# Observação: existe um diretório chamado "db/" no repo.
+# Para permitir "make db", este alvo é PHONY (não conflita com a pasta).
+DB ?= ptv
+
+.PHONY: db db-list host-db
+
+db-list:
+	@echo "DBs disponíveis:"
+	@echo "  ptv   -> baixa FASTA (NCBI), gera BLAST DB e índice Bowtie2"
+	@echo "  host  -> baixa hospedeiro (Sus scrofa) e gera índice Bowtie2 (opcional)"
+	@echo "  all   -> ptv + host"
+	@echo
+	@echo "Uso:"
+	@echo "  make db DB=ptv"
+	@echo "  make db DB=host"
+	@echo "  make db DB=all"
+
+db:
+	@case "$(DB)" in \
+		ptv)  $(MAKE) ptv-fasta ptv-fasta-legacy blastdb bowtie2-index ;; \
+		host) $(MAKE) host-db ;; \
+		all)  $(MAKE) db DB=ptv; $(MAKE) db DB=host ;; \
+		*)    echo "[ERRO] DB inválido: $(DB)"; $(MAKE) db-list; exit 2 ;; \
+	esac
+
+# Gera índice Bowtie2 do hospedeiro em ref/host/sus_scrofa_bt2*
+# (A pipeline hoje procura por ref/host/sus_scrofa_bt2.1.bt2)
+host-db:
+	@mkdir -p ref/host data/ref/host
+	@bash scripts/11_download_sus_scrofa.sh || true
+	@HOST_FASTA="$$(ls -1 ref/host/*.fa ref/host/*.fasta ref/host/*.fa.gz ref/host/*.fasta.gz data/ref/host/*.fa data/ref/host/*.fasta data/ref/host/*.fa.gz data/ref/host/*.fasta.gz 2>/dev/null | head -n1)"; \
+	if [[ -z "$$HOST_FASTA" ]]; then \
+		echo "[ERRO] Nenhum FASTA do hospedeiro encontrado em ref/host/ ou data/ref/host/."; \
+		echo "       Verifique scripts/11_download_sus_scrofa.sh (saída/paths)."; \
+		exit 1; \
+	fi; \
+	if [[ "$$HOST_FASTA" == *.gz ]]; then \
+		echo "[INFO] Descompactando FASTA do hospedeiro para ref/host/sus_scrofa.fa"; \
+		gzip -cd "$$HOST_FASTA" > ref/host/sus_scrofa.fa; \
+		HOST_FASTA=ref/host/sus_scrofa.fa; \
+	else \
+		if [[ "$$HOST_FASTA" != ref/host/* ]]; then \
+			ln -sf "$$(realpath "$$HOST_FASTA")" ref/host/sus_scrofa.fa; \
+			HOST_FASTA=ref/host/sus_scrofa.fa; \
+		else \
+			HOST_FASTA="$$HOST_FASTA"; \
+		fi; \
+	fi; \
+	if [[ -s ref/host/sus_scrofa_bt2.1.bt2 && ref/host/sus_scrofa_bt2.1.bt2 -nt "$$HOST_FASTA" ]]; then \
+		echo "[INFO] Índice do hospedeiro já existe e está atualizado: ref/host/sus_scrofa_bt2"; \
+	else \
+		echo "[INFO] Gerando índice Bowtie2 do hospedeiro em ref/host/sus_scrofa_bt2"; \
+		bowtie2-build "$$HOST_FASTA" ref/host/sus_scrofa_bt2; \
+	fi
+
+.PHONY: import-sample
+import-sample:
+	bash scripts/00_import_sample.sh --sample "$(SAMPLE)" --r1 "$(R1)" --r2 "$(R2)"
+
+
+check-env: test-env
+	@:
+
+
+.PHONY: demo
+demo: ptv-fasta
+	python3 scripts/97_make_demo_fastq.py --ref "$(REF_FASTA)" --outdir data/raw --sample DEMO --pairs 2000 --len 150 --insert 300
+
+ux:
+	python3 scripts/ux_dashboard.py --host 0.0.0.0 --port 8000

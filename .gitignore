@@ -24,3 +24,13 @@ config.env
 # bancos gerados
 data/db/
 dist/
+tmp/
+
+# --- bioinfo artefacts (não versionar) ---
+data/
+results/
+logs/
+blastdb/
+bowtie2/
+tmp/
+*.bak.*
