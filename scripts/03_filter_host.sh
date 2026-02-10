@@ -4,8 +4,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
-if [[ -f "${REPO_ROOT}/config.env" ]]; then
-  source "${REPO_ROOT}/config.env"
+CONFIG_FILE="${REPO_ROOT}/config/picornavirus.env"
+LEGACY_CONFIG="${REPO_ROOT}/config.env"
+if [[ -f "${CONFIG_FILE}" ]]; then
+  source "${CONFIG_FILE}"
+elif [[ -f "${LEGACY_CONFIG}" ]]; then
+  source "${LEGACY_CONFIG}"
 fi
 
 source "${SCRIPT_DIR}/lib/common.sh"
@@ -20,8 +24,21 @@ RAW_DIR="$(resolve_path "${RAW_DIR:-data/raw}")"
 HOST_REMOVED_DIR="$(resolve_path "${HOST_REMOVED_DIR:-data/host_removed}")"
 HOST_INDEX_PREFIX="$(resolve_path "${HOST_INDEX_PREFIX:-ref/host/sus_scrofa_bt2}")"
 
-R1="${RAW_DIR}/${SAMPLE}_R1.fastq.gz"
-R2="${RAW_DIR}/${SAMPLE}_R2.fastq.gz"
+if [[ -n "${SAMPLE_SINGLE:-}" ]]; then
+  log_error "Filtro do hospedeiro requer leituras pareadas. Use SAMPLE_R1/SAMPLE_R2."
+fi
+
+if [[ -n "${SAMPLE_R1:-}" ]]; then
+  R1="$(resolve_path "${SAMPLE_R1}")"
+else
+  R1="${RAW_DIR}/${SAMPLE}_R1.fastq.gz"
+fi
+
+if [[ -n "${SAMPLE_R2:-}" ]]; then
+  R2="$(resolve_path "${SAMPLE_R2}")"
+else
+  R2="${RAW_DIR}/${SAMPLE}_R2.fastq.gz"
+fi
 
 check_file "$R1"
 check_file "$R2"

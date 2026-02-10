@@ -67,19 +67,46 @@ O alvo `fix-wsl` normaliza os arquivos rastreados para LF e restaura permissões
 
 ---
 
-## 4. Comando único (quick start)
+## 4. Quickstart: rodar amostra
 
-Para rodar toda a verificação e o pipeline básico em um único comando, use:
+O fluxo recomendado para rodar uma amostra é via `make run`, que faz:
+1. staging da amostra (symlink por padrão, com gzip automático);
+2. preparação do banco (FASTA + BLAST + Bowtie2);
+3. pipeline completo.
+
+Exemplo (pareado):
 
 ```bash
-./scripts/20_run_pipeline.sh --install --sample 81554_S150 --kmer 31
+make run ID=demo \
+  R1=/caminho/reads_R1.fastq.gz \
+  R2=/caminho/reads_R2.fastq.gz \
+  DB=ptv
 ```
 
-Esse script faz:
-1. checagem/instalação de dependências;
-2. preparação de diretórios e bancos (FASTA + BLAST + Bowtie2);
-3. montagem dos contigs (Velvet por padrão);
-4. BLAST dos contigs contra o banco de PTV.
+Para forçar cópia em vez de symlink, use `COPY=1` no `make sample-add` (ou configure staging manualmente).
+
+Também é possível usar diretamente o script principal:
+
+```bash
+./scripts/20_run_pipeline.sh --install --sample demo --kmer 31
+```
+
+Se existir `config/picornavirus.env` (ou `config.env` legado), ele é usado como base (ex.: `ASSEMBLER=spades`, `VELVET_K`, `THREADS`).
+
+## 5. DBs suportados
+
+O DB manager oferece perfis básicos e suporta queries personalizadas:
+
+```bash
+make db-list
+make db DB=ptv
+```
+
+Para alterar a query NCBI:
+
+```bash
+make db DB=ptv DB_QUERY='"Teschovirus"[Organism] AND "complete genome"[Title]'
+```
 
 Se existir `config.env`, ele é usado como base (ex.: `ASSEMBLER=spades`, `VELVET_K`, `THREADS`). Também dá para chamar via `make pipeline`.
 

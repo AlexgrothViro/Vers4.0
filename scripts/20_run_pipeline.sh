@@ -4,11 +4,15 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 
-if [[ -f "${REPO_ROOT}/config.env" ]]; then
-  source "${REPO_ROOT}/config.env"
+CONFIG_FILE="${REPO_ROOT}/config/picornavirus.env"
+LEGACY_CONFIG="${REPO_ROOT}/config.env"
+HAS_CONFIG=0
+if [[ -f "${CONFIG_FILE}" ]]; then
+  source "${CONFIG_FILE}"
   HAS_CONFIG=1
-else
-  HAS_CONFIG=0
+elif [[ -f "${LEGACY_CONFIG}" ]]; then
+  source "${LEGACY_CONFIG}"
+  HAS_CONFIG=1
 fi
 
 usage() {
@@ -17,12 +21,12 @@ Uso: scripts/20_run_pipeline.sh [opções]
 
 Opções:
   --install           instala dependências via apt-get (usa 00_check_env.sh)
-  --sample NOME       nome da amostra (padrão: SAMPLE_NAME ou 81554_S150)
+  --sample NOME       nome da amostra (padrão: SAMPLE_ID/SAMPLE_NAME ou amostra_teste)
   --kmer K            k-mer para Velvet (padrão: VELVET_K ou 31)
   --skip-host-filter  ignora o filtro do hospedeiro
   -h, --help          mostra esta ajuda
 
-Obs.: se existir config.env, ele será usado como base de configuração.
+Obs.: se existir config/picornavirus.env (ou config.env legado), ele será usado como base de configuração.
 USAGE
 }
 
@@ -73,7 +77,36 @@ SAMPLE_NAME="${SAMPLE_OVERRIDE:-${SAMPLE_NAME:-${SAMPLE:-81554_S150}}}"
 VELVET_K="${KMER_OVERRIDE:-${VELVET_K:-31}}"
 ASSEMBLER="${ASSEMBLER:-velvet}"
 THREADS="${THREADS:-4}"
-BLAST_DB="$(resolve_path "${BLAST_DB:-blastdb/ptv}")"
+DB="${DB:-ptv}"
+BLAST_DB="$(resolve_path "${BLAST_DB:-blastdb/${DB}}")"
+RAW_DIR="$(resolve_path "${RAW_DIR:-data/raw}")"
+
+SAMPLE_R1="${SAMPLE_R1:-}"
+SAMPLE_R2="${SAMPLE_R2:-}"
+SAMPLE_SINGLE="${SAMPLE_SINGLE:-}"
+
+if [[ -n "$SAMPLE_SINGLE" && ( -n "$SAMPLE_R1" || -n "$SAMPLE_R2" ) ]]; then
+  echo "[ERRO] Use --single ou --r1/--r2, mas não ambos." >&2
+  exit 1
+fi
+
+if [[ -n "$SAMPLE_SINGLE" ]]; then
+  SAMPLE_SINGLE="$(resolve_path "$SAMPLE_SINGLE")"
+else
+  if [[ -n "$SAMPLE_R1" ]]; then
+    SAMPLE_R1="$(resolve_path "$SAMPLE_R1")"
+  else
+    SAMPLE_R1="${RAW_DIR}/${SAMPLE_ID}_R1.fastq.gz"
+  fi
+
+  if [[ -n "$SAMPLE_R2" ]]; then
+    SAMPLE_R2="$(resolve_path "$SAMPLE_R2")"
+  else
+    SAMPLE_R2="${RAW_DIR}/${SAMPLE_ID}_R2.fastq.gz"
+  fi
+fi
+
+export SAMPLE_ID SAMPLE_NAME SAMPLE_R1 SAMPLE_R2 SAMPLE_SINGLE RAW_DIR
 
 # --- Preflight: garantir FASTQs da amostra ---
 RAW_DIR="${REPO_ROOT}/data/raw"
@@ -105,12 +138,35 @@ fi
 
 log "[2/6] Preparando diretórios e bancos"
 make -C "$REPO_ROOT" setup_dirs
-make -C "$REPO_ROOT" ptv-fasta
-make -C "$REPO_ROOT" blastdb
-make -C "$REPO_ROOT" bowtie2-index
+make -C "$REPO_ROOT" db DB="$DB" DB_QUERY="${DB_QUERY:-}"
+
+MISSING_READS=0
+if [[ -n "$SAMPLE_SINGLE" ]]; then
+  if [[ ! -f "$SAMPLE_SINGLE" ]]; then
+    echo "[ERRO] Read single não encontrado: $SAMPLE_SINGLE" >&2
+    MISSING_READS=1
+  fi
+else
+  if [[ ! -f "$SAMPLE_R1" ]]; then
+    echo "[ERRO] Read R1 não encontrado: $SAMPLE_R1" >&2
+    MISSING_READS=1
+  fi
+  if [[ ! -f "$SAMPLE_R2" ]]; then
+    echo "[ERRO] Read R2 não encontrado: $SAMPLE_R2" >&2
+    MISSING_READS=1
+  fi
+fi
+
+if [[ $MISSING_READS -ne 0 ]]; then
+  echo "Sugestão: make run ID=${SAMPLE_ID} R1=/caminho/R1.fastq.gz R2=/caminho/R2.fastq.gz DB=${DB}" >&2
+  exit 1
+fi
 
 if [[ $SKIP_HOST_FILTER -eq 0 ]]; then
   log "[3/6] Filtrando hospedeiro (opcional)"
+  if [[ -n "$SAMPLE_SINGLE" ]]; then
+    echo "[AVISO] Filtro do hospedeiro ignora amostras single-end. Use --skip-host-filter para silenciar." >&2
+  else
   HOST_INDEX_PREFIX="${REPO_ROOT}/ref/host/sus_scrofa_bt2"
   if [[ -f "${HOST_INDEX_PREFIX}.1.bt2" ]]; then
     "$SCRIPT_DIR/03_filter_host.sh" "$SAMPLE_NAME"
@@ -118,6 +174,7 @@ if [[ $SKIP_HOST_FILTER -eq 0 ]]; then
     echo "[AVISO] Índice do hospedeiro não encontrado em ${HOST_INDEX_PREFIX}.1.bt2"
     echo "        Se quiser rodar o filtro de hospedeiro, execute scripts/11_download_sus_scrofa.sh"
     echo "        e gere o índice Bowtie2 manualmente."
+  fi
   fi
 fi
 
