@@ -12,6 +12,23 @@ export MAMBA_ROOT_PREFIX="$MAMBA_ROOT"
 
 need_cmd() { command -v "$1" >/dev/null 2>&1; }
 
+LOCAL_MAMBA_CANDIDATES=(
+  "$ROOT/bundle/cache/micromamba.tar.bz2"
+  "$ROOT/bundle/cache/micromamba-linux-64.tar.bz2"
+  "$ROOT/bundle/micromamba.tar.bz2"
+)
+
+resolve_local_mamba() {
+  local file
+  for file in "${LOCAL_MAMBA_CANDIDATES[@]}"; do
+    if [[ -f "$file" ]]; then
+      echo "$file"
+      return 0
+    fi
+  done
+  return 1
+}
+
 echo "[INFO] Root: $ROOT"
 mkdir -p "$BIN_DIR" "$MAMBA_ROOT"
 
@@ -28,11 +45,17 @@ if ! need_cmd bzip2; then
   echo "[WARN] bzip2 não encontrado. Tentando instalar via apt (sudo)..."
   sudo apt-get update && sudo apt-get install -y bzip2
 fi
-# Baixa micromamba (URL oficial "latest")
+
+# Instala micromamba (preferindo bundle/cache local em modo offline)
 if [[ ! -x "$MICRO" ]]; then
-  echo "[INFO] Baixando micromamba..."
   tmp="$(mktemp -d)"
-  ( cd "$tmp" && curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba )
+  if local_bundle="$(resolve_local_mamba)"; then
+    echo "[INFO] Usando micromamba local: $local_bundle"
+    tar -xvjf "$local_bundle" -C "$tmp" bin/micromamba
+  else
+    echo "[INFO] Bundle local não encontrado. Baixando micromamba..."
+    ( cd "$tmp" && curl -Ls https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xvj bin/micromamba )
+  fi
   install -m 0755 "$tmp/bin/micromamba" "$MICRO"
   rm -rf "$tmp"
 else

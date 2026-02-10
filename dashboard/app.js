@@ -2,6 +2,8 @@ const statusEl = document.getElementById("job-status");
 const actionEl = document.getElementById("job-action");
 const outputEl = document.getElementById("job-output");
 const samplesDatalist = document.getElementById("samples");
+const finalStatusEl = document.getElementById("final-status");
+const historyListEl = document.getElementById("history-list");
 
 const setStatus = (status, action) => {
   statusEl.textContent = status;
@@ -18,6 +20,11 @@ const setOutput = (text) => {
 const appendOutput = (text) => {
   outputEl.textContent += text;
   outputEl.scrollTop = outputEl.scrollHeight;
+};
+
+const setFinalStatus = (html, tone = "") => {
+  finalStatusEl.className = `final-status ${tone}`.trim();
+  finalStatusEl.innerHTML = html || "";
 };
 
 const fetchSamples = async () => {
@@ -38,9 +45,88 @@ const fetchSamples = async () => {
   }
 };
 
+const openRunArtifact = (runDir, fileType) => {
+  window.open(`/api/history/file?run=${encodeURIComponent(runDir)}&type=${encodeURIComponent(fileType)}`, "_blank");
+};
+
+const rerunHistory = async (runDir) => {
+  const response = await fetch("/api/history/rerun", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run_dir: runDir }),
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    alert(`Falha ao reexecutar: ${text}`);
+    return;
+  }
+  const { job_id: jobId } = await response.json();
+  setStatus("Executando...", `rerun:${runDir}`);
+  setOutput("");
+  setFinalStatus("");
+  pollJob(jobId, `rerun:${runDir}`);
+};
+
+const formatDate = (value) => {
+  if (!value) return "-";
+  return value.replace("T", " ");
+};
+
+const renderHistory = (runs) => {
+  if (!runs.length) {
+    historyListEl.innerHTML = "<p>Nenhuma execução registrada ainda.</p>";
+    return;
+  }
+
+  historyListEl.innerHTML = "";
+  runs.forEach((run) => {
+    const card = document.createElement("article");
+    card.className = "history-item";
+    const sample = run.sample || "(sem sample)";
+    const status = run.exit_code === 0 ? "SUCESSO" : "FALHA";
+    const statusClass = run.exit_code === 0 ? "ok" : "error";
+
+    card.innerHTML = `
+      <header>
+        <h3>${sample}</h3>
+        <span class="badge ${statusClass}">${status}</span>
+      </header>
+      <p><strong>Início:</strong> ${formatDate(run.start)} • <strong>Fim:</strong> ${formatDate(run.end)}</p>
+      <p><strong>Assembler:</strong> ${run.assembler || "-"} • <strong>k-mer:</strong> ${run.kmer || "-"} • <strong>Threads:</strong> ${run.threads || "-"}</p>
+      <div class="actions">
+        <button data-open="report">Abrir report</button>
+        <button data-open="log">Abrir log</button>
+        <button data-open="blast">Abrir blast</button>
+        <button data-rerun="1">Reexecutar</button>
+      </div>
+    `;
+
+    card.querySelectorAll("button[data-open]").forEach((button) => {
+      button.addEventListener("click", () => openRunArtifact(run.run_dir, button.dataset.open));
+    });
+    card.querySelector("button[data-rerun]").addEventListener("click", () => rerunHistory(run.run_dir));
+
+    historyListEl.appendChild(card);
+  });
+};
+
+const fetchHistory = async () => {
+  try {
+    const response = await fetch("/api/history");
+    if (!response.ok) {
+      return;
+    }
+    const data = await response.json();
+    renderHistory(data.runs || []);
+  } catch (err) {
+    console.error("Falha ao carregar histórico", err);
+  }
+};
+
 const runAction = async (action, params = {}) => {
   setStatus("Executando...", action);
   setOutput("");
+  setFinalStatus("");
 
   const response = await fetch("/api/run", {
     method: "POST",
@@ -79,12 +165,21 @@ const pollJob = (jobId, action) => {
 
     if (data.status === "done") {
       setStatus("Concluído", action);
+      const report = data.run?.paths?.run_report;
+      const runDir = data.run?.run_dir || "";
+      const reportLink = report && runDir
+        ? `<a href="/api/history/file?run=${encodeURIComponent(runDir)}&type=report" target="_blank">Abrir report</a>`
+        : "Report indisponível";
+      setFinalStatus(`<strong>SUCESSO</strong> ✅ ${reportLink}`, "ok");
     } else {
       setStatus("Falhou", action);
+      const tail = data.tail || "Sem log disponível.";
+      setFinalStatus(`<strong>FALHA</strong> ❌<pre>${tail}</pre>`, "error");
     }
 
     clearInterval(interval);
     fetchSamples();
+    fetchHistory();
   }, 1200);
 };
 
@@ -118,9 +213,22 @@ const bindButtons = () => {
       kmer: formData.get("kmer"),
     });
   });
+
+  document.querySelectorAll(".tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach((item) => item.classList.remove("active"));
+      document.querySelectorAll(".tab-panel").forEach((panel) => panel.classList.remove("active"));
+      tab.classList.add("active");
+      document.getElementById(tab.dataset.tab).classList.add("active");
+      if (tab.dataset.tab === "tab-historico") {
+        fetchHistory();
+      }
+    });
+  });
 };
 
 window.addEventListener("load", () => {
   bindButtons();
   fetchSamples();
+  fetchHistory();
 });

@@ -15,7 +15,7 @@ BLAST_DB      ?= blastdb/ptv
 BOWTIE2_INDEX ?= bowtie2/ptv
 
 .PHONY: help setup_dirs deps test-env filter-host test-velvet test-blast \
-	ptv-fasta ptv-fasta-legacy blastdb bowtie2-index pipeline test clean fix-wsl ux
+	ptv-fasta ptv-fasta-legacy blastdb bowtie2-index pipeline test clean fix-wsl ux test-demo
 
 -include config.env
 
@@ -113,6 +113,11 @@ smoke-test: test-env ptv-fasta-legacy blastdb bowtie2-index
 	$(SCRIPTS_DIR)/90_smoke_test.sh
 
 test: smoke-test
+
+
+.PHONY: test-demo
+test-demo:
+	bash scripts/91_verify_demo_outputs.sh "$(SAMPLE)"
 
 clean:
 	rm -rf run_T1 blastdb bowtie2 results logs tmp
