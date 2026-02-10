@@ -11,19 +11,7 @@
       <div>
         <p class="eyebrow">WSL/Ubuntu • Picornavirus-quali2026</p>
         <h1>Painel de Uso (UX)</h1>
-        <p class="subtitle">
-          Interface simples para executar o pipeline com poucos cliques, mantendo logs claros e
-          rastreáveis para qualificação.
-        </p>
-      </div>
-      <div class="hero__card">
-        <h2>Como acessar</h2>
-        <ol>
-          <li>Inicie o painel no WSL.</li>
-          <li>Abra o navegador no Windows.</li>
-          <li>Visite <strong>http://localhost:8000</strong>.</li>
-        </ol>
-        <p class="hint">Dica: mantenha este terminal aberto enquanto o painel estiver em uso.</p>
+        <p class="subtitle">Interface simples para executar pipeline, construir DB viral e importar amostras sem digitar caminhos completos.</p>
       </div>
     </header>
 
@@ -35,67 +23,93 @@
 
       <section id="tab-execucao" class="tab-panel active">
         <section class="card">
-          <div class="card__header">
-            <h2>1) Verificar ambiente</h2>
-            <p>Confirma se todas as dependências do pipeline estão instaladas.</p>
-          </div>
+          <div class="card__header"><h2>1) Verificar ambiente</h2></div>
           <button class="primary" data-action="check_env">Rodar check de ambiente</button>
         </section>
 
         <section class="card">
-          <div class="card__header">
-            <h2>2) Gerar DEMO reprodutível</h2>
-            <p>Cria FASTQs de demonstração em <code>data/raw</code> para testes rápidos.</p>
-          </div>
+          <div class="card__header"><h2>2) Gerar DEMO</h2></div>
           <button class="primary" data-action="demo">Gerar DEMO</button>
         </section>
 
         <section class="card">
           <div class="card__header">
-            <h2>3) Importar amostras reais</h2>
-            <p>Informe os caminhos de R1/R2 (pode ser caminho do Windows).</p>
+            <h2>3) Baixar/Gerar DB viral (NCBI)</h2>
+            <p>Sem hardcode de PTV. Escolha alvo no catálogo, com query ou taxid opcionais.</p>
+          </div>
+          <form id="db-form" class="form-grid">
+            <label>Alvo
+              <select id="db-target" name="target" required></select>
+            </label>
+            <label>Query customizada (opcional)
+              <input name="query" placeholder='Ex.: "Teschovirus"[Organism] AND refseq[filter]' />
+            </label>
+            <label>TaxID (opcional)
+              <input name="taxid" placeholder="Ex.: 12087" />
+            </label>
+            <button class="primary" type="submit">Baixar/Gerar DB</button>
+          </form>
+        </section>
+
+        <section class="card">
+          <div class="card__header">
+            <h2>4) Importar amostras por caminho colado (R1/R2)</h2>
+            <p>Aceita caminho Windows com normalização automática.</p>
           </div>
           <form id="import-form" class="form-grid">
-            <label>
-              Nome da amostra
-              <input name="sample" placeholder="Ex.: 81554_S150" list="samples" required />
+            <label>Nome da amostra
+              <input name="sample" list="samples" required />
             </label>
-            <label>
-              Caminho R1
+            <label>Caminho R1
               <input name="r1" placeholder="Ex.: C:\\dados\\amostra_R1.fastq.gz" required />
             </label>
-            <label>
-              Caminho R2
+            <label>Caminho R2
               <input name="r2" placeholder="Ex.: C:\\dados\\amostra_R2.fastq.gz" required />
             </label>
-            <label class="checkbox">
-              <input type="checkbox" name="copy" />
-              Copiar arquivos (em vez de criar symlink)
-            </label>
-            <button class="primary" type="submit">Importar amostra</button>
+            <label class="checkbox"><input type="checkbox" name="copy" />Copiar arquivos (em vez de symlink)</label>
+            <button class="primary" type="submit">Importar por caminho</button>
           </form>
           <datalist id="samples"></datalist>
         </section>
 
         <section class="card">
           <div class="card__header">
-            <h2>4) Rodar pipeline</h2>
-            <p>Velvet é o padrão. SPAdes está disponível se <code>config.env</code> estiver configurado.</p>
+            <h2>5) Upload/importação (R1/R2 ou .zip)</h2>
+          </div>
+          <form id="upload-form" class="form-grid" enctype="multipart/form-data">
+            <label>Nome da amostra
+              <input name="sample" required />
+            </label>
+            <label>Arquivo R1 (opcional)
+              <input name="r1file" type="file" accept=".fastq,.fastq.gz" />
+            </label>
+            <label>Arquivo R2 (opcional)
+              <input name="r2file" type="file" accept=".fastq,.fastq.gz" />
+            </label>
+            <label>Arquivo .zip (opcional)
+              <input name="zipfile" type="file" accept=".zip" />
+            </label>
+            <button class="primary" type="submit">Importar upload</button>
+          </form>
+        </section>
+
+        <section class="card">
+          <div class="card__header">
+            <h2>6) Rodar pipeline</h2>
+            <p>Selecione amostra já presente em <code>data/raw</code> (sem caminho completo).</p>
           </div>
           <form id="pipeline-form" class="form-grid">
-            <label>
-              Nome da amostra
-              <input name="sample" placeholder="Ex.: DEMO" list="samples" required />
+            <label>Amostra
+              <select id="sample-select" name="sample_select"></select>
+              <input name="sample" placeholder="Ou informe manualmente" list="samples" />
             </label>
-            <label>
-              Assembler
+            <label>Assembler
               <select name="assembler">
                 <option value="velvet">Velvet (padrão)</option>
-                <option value="spades">SPAdes (requer config.env)</option>
+                <option value="spades">SPAdes</option>
               </select>
             </label>
-            <label>
-              k-mer (Velvet)
+            <label>k-mer
               <input name="kmer" type="number" min="15" max="99" value="31" />
             </label>
             <button class="primary" type="submit">Executar pipeline</button>
@@ -103,19 +117,10 @@
         </section>
 
         <section class="card">
-          <div class="card__header">
-            <h2>5) Saída e logs</h2>
-            <p>Acompanhe o progresso das execuções. Logs completos ficam em <code>logs/</code>.</p>
-          </div>
+          <div class="card__header"><h2>7) Saída e logs</h2></div>
           <div class="status">
-            <div>
-              <span class="status__label">Status atual</span>
-              <strong id="job-status">Aguardando ação</strong>
-            </div>
-            <div>
-              <span class="status__label">Última execução</span>
-              <strong id="job-action">-</strong>
-            </div>
+            <div><span class="status__label">Status atual</span><strong id="job-status">Aguardando ação</strong></div>
+            <div><span class="status__label">Última execução</span><strong id="job-action">-</strong></div>
           </div>
           <div class="pipeline-progress" id="pipeline-progress" hidden>
             <h3>Etapas do pipeline</h3>
@@ -128,7 +133,7 @@
           <div id="final-status" class="final-status"></div>
           <pre id="job-output" class="log"></pre>
           <div class="report-viewer" id="report-viewer" hidden>
-            <h3>Resumo do resultado (results/reports/*_summary.md)</h3>
+            <h3>Resumo do resultado</h3>
             <pre id="report-content" class="report-content"></pre>
           </div>
         </section>
@@ -136,21 +141,11 @@
 
       <section id="tab-historico" class="tab-panel">
         <section class="card">
-          <div class="card__header">
-            <h2>Histórico de execuções</h2>
-            <p>Runs persistidos em <code>results/runs/*/run.json</code> com links rápidos para artefatos.</p>
-          </div>
+          <div class="card__header"><h2>Histórico de execuções</h2></div>
           <div id="history-list" class="history-list"></div>
         </section>
       </section>
     </main>
-
-    <footer>
-      <p>
-        Painel de uso local • Picornavirus-quali2026 • dados gerados permanecem em <code>data/</code>,
-        <code>results/</code> e <code>logs/</code>.
-      </p>
-    </footer>
 
     <script src="/app.js"></script>
   </body>

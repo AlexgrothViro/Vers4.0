@@ -123,3 +123,38 @@ make ux
 Depois, no Windows, acesse: `http://localhost:8000`.
 
 O painel permite checar o ambiente, gerar DEMO, importar amostras e rodar o pipeline (Velvet por padrão, SPAdes opcional). Consulte detalhes em `docs/PAINEL_UX.md`.
+
+---
+
+## 6. Banco viral genérico (dashboard + script)
+
+Agora o projeto suporta DB parametrizável (sem hardcode de PTV) via:
+
+```bash
+bash scripts/10_build_viral_db.sh --target teschovirus_a
+bash scripts/10_build_viral_db.sh --target enterovirus_g --query '"Enterovirus G"[Organism]'
+bash scripts/10_build_viral_db.sh --target sapelovirus_a --taxid 12115
+```
+
+Catálogo versionado em `config/targets.json`.
+
+Estrutura gerada:
+
+```text
+db/<target>/
+  ├─ sequences.fasta
+  ├─ blastdb/
+  └─ metadata.json
+```
+
+`metadata.json` registra query/taxid, data, número de sequências e fonte/versão.
+
+## 7. Início rápido no Windows
+
+Use o launcher:
+
+```bat
+bundle\start_platform.bat
+```
+
+Ele valida `wsl.exe`, valida distro (default: `Ubuntu`), converte paths Windows→WSL e inicia o dashboard em background, abrindo o navegador em `http://localhost:8000`.
