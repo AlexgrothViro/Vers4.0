@@ -33,6 +33,54 @@ normalize_windows_path() {
   printf '%s\n' "$raw"
 }
 
+
+resolve_existing_file() {
+  local raw="$1"
+  # se já existe como caminho (abs/rel), retorna
+  if [[ -f "$raw" ]]; then
+    printf '%s\n' "$raw"
+    return 0
+  fi
+
+  # tenta basename em diretórios comuns
+  local base
+  base="$(basename "$raw")"
+
+  local candidates=(
+    "$PWD/$base"
+    "$PWD/data/raw/$base"
+    "$PWD/data/$base"
+    "$HOME/Downloads/$base"
+    "$HOME/Área de Trabalho/$base"
+    "$HOME/Desktop/$base"
+  )
+
+  for c in "${candidates[@]}"; do
+    if [[ -f "$c" ]]; then
+      printf '%s\n' "$c"
+      return 0
+    fi
+  done
+
+  # tenta busca rápida no diretório atual (1 nível)
+  local found
+  found="$(find "$PWD" -maxdepth 2 -type f -name "$base" 2>/dev/null | head -n 1 || true)"
+  if [[ -n "$found" && -f "$found" ]]; then
+    printf '%s\n' "$found"
+    return 0
+  fi
+
+  # não achou
+  echo "[ERRO] Arquivo não encontrado: $raw" >&2
+  echo "[DICA] Você pode passar caminho absoluto/relativo, ou apenas o nome do arquivo se ele estiver em:" >&2
+  echo "       - pasta atual" >&2
+  echo "       - data/raw/" >&2
+  echo "       - ~/Downloads/" >&2
+  echo "[DICA] Procurando por '$base' (até 2 níveis abaixo do diretório atual):" >&2
+  find "$PWD" -maxdepth 2 -type f -name "$base" 2>/dev/null | sed 's/^/  - /' >&2 || true
+  return 1
+}
+
 check_ext() {
   local file="$1"
   [[ "$file" =~ \.fastq$ || "$file" =~ \.fastq\.gz$ ]] || {
@@ -57,14 +105,9 @@ done
 R1="$(normalize_windows_path "$R1")"
 R2="$(normalize_windows_path "$R2")"
 
-if [[ ! -f "$R1" ]]; then
-  echo "[ERRO] R1 não encontrado: $R1"
-  exit 1
-fi
-if [[ ! -f "$R2" ]]; then
-  echo "[ERRO] R2 não encontrado: $R2"
-  exit 1
-fi
+R1="$(resolve_existing_file "$R1")"
+R2="$(resolve_existing_file "$R2")"
+
 if [[ ! -s "$R1" ]]; then
   echo "[ERRO] arquivo vazio: $R1"
   exit 1

@@ -79,35 +79,50 @@ init_profiles
 
 CMD="${1:-}"
 case "$CMD" in
-    list)
-    if [[ "${2:-}" == "--json" ]]; then
-      cat <<'JSON'
-[
-  {"id":"ptv","label":"Teschovirus (PTV)","query":"\"Teschovirus\"[Organism]"},
-  {"id":"evg","label":"Enterovirus G","query":"\"Enterovirus G\"[Organism]"},
-  {"id":"psv","label":"Sapelovirus A","query":"\"Sapelovirus A\"[Organism]"},
-  {"id":"svv","label":"Senecavirus A","query":"\"Senecavirus A\"[Organism]"},
-  {"id":"fmdv","label":"Foot-and-mouth disease virus (FMDV)","query":"\"Foot-and-mouth disease virus\"[Organism]"},
+  list)
+      # Ordem estável (não depende da ordem do associative array)
+      DB_ORDER=(
+        ptv evg psv svv fmdv
+        picornaviridae_refseq picornaviridae_complete picornaviridae_all
+      )
 
-  {"id":"picornaviridae_refseq","label":"Picornaviridae (RefSeq) [recomendado]","query":"\"Picornaviridae\"[Organism] AND refseq[filter]"},
-  {"id":"picornaviridae_complete","label":"Picornaviridae (complete genome/cds)","query":"\"Picornaviridae\"[Organism] AND (\"complete genome\"[Title] OR \"complete cds\"[Title])"},
-  {"id":"picornaviridae_all","label":"Picornaviridae (ALL) [gigante]","query":"\"Picornaviridae\"[Organism]"}
+      if [[ "${2:-}" == "--json" ]]; then
+        printf '[
+'
+        first=1
+        for id in "${DB_ORDER[@]}"; do
+          q="${DB_QUERIES[$id]:-}"
+          d="${DB_DESC[$id]:-}"
+          [[ -n "$q" ]] || continue
+
+          # escape básico pra JSON
+          q_esc="${q//\\/\\\\}"
+          q_esc="${q_esc//\"/\\\"}"
+          d_esc="${d//\\/\\\\}"
+          d_esc="${d_esc//\"/\\\"}"
+
+          if [[ $first -eq 0 ]]; then printf ',
+'; fi
+          first=0
+          printf '  {"id":"%s","label":"%s","query":"%s"}' "$id" "$d_esc" "$q_esc"
+        done
+        printf '
 ]
-JSON
-      exit 0
-    fi
+'
+        exit 0
+      fi
 
-    printf "DB\tQuery\n"
-    printf "ptv\t\"Teschovirus\"[Organism]\n"
-    printf "evg\t\"Enterovirus G\"[Organism]\n"
-    printf "psv\t\"Sapelovirus A\"[Organism]\n"
-    printf "svv\t\"Senecavirus A\"[Organism]\n"
-    printf "fmdv\t\"Foot-and-mouth disease virus\"[Organism]\n"
-    printf "picornaviridae_refseq\t\"Picornaviridae\"[Organism] AND refseq[filter]\n"
-    printf "picornaviridae_complete\t\"Picornaviridae\"[Organism] AND (\"complete genome\"[Title] OR \"complete cds\"[Title])\n"
-    printf "picornaviridae_all\t\"Picornaviridae\"[Organism]\n"
-    exit 0
-    ;;
+      printf "DB	Desc	Query
+"
+      for id in "${DB_ORDER[@]}"; do
+        q="${DB_QUERIES[$id]:-}"
+        d="${DB_DESC[$id]:-}"
+        [[ -n "$q" ]] || continue
+        printf "%s	%s	%s
+" "$id" "$d" "$q"
+      done
+      exit 0
+      ;;
 
   setup)
     ;;
