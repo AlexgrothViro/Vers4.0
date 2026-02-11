@@ -105,24 +105,30 @@ else
     SAMPLE_R2="${RAW_DIR}/${SAMPLE_NAME}_R2.fastq.gz"
   fi
 fi
-  SAMPLE_ID="-e"
+  SAMPLE_ID="${SAMPLE_ID:-$SAMPLE_NAME}"
 
   export SAMPLE_ID SAMPLE_NAME SAMPLE_R1 SAMPLE_R2 SAMPLE_SINGLE RAW_DIR
 
 # --- Preflight: garantir FASTQs da amostra ---
-RAW_DIR="${REPO_ROOT}/data/raw"
-R1="${RAW_DIR}/${SAMPLE_NAME}_R1.fastq.gz"
-R2="${RAW_DIR}/${SAMPLE_NAME}_R2.fastq.gz"
-if [[ ! -s "$R1" || ! -s "$R2" ]]; then
-  echo "[ERRO] FASTQs da amostra não encontrados ou vazios:" >&2
-  echo "       $R1" >&2
-  echo "       $R2" >&2
-  echo "" >&2
-  echo "[DICA] Importe uma amostra com:" >&2
-  echo "  bash scripts/00_import_sample.sh --sample NOME --r1 CAMINHO --r2 CAMINHO [--copy]" >&2
-  echo "[DICA] Amostras detectadas em data/raw:" >&2
-  ls -1 "${RAW_DIR}"/*_R1.fastq.gz 2>/dev/null | sed -E 's#.*/##; s/_R1\.fastq\.gz$//' | sort -u | sed 's/^/  - /' >&2 || true
-  exit 1
+if [[ -n "$SAMPLE_SINGLE" ]]; then
+  if [[ ! -s "$SAMPLE_SINGLE" ]]; then
+    echo "[ERRO] Read single não encontrado ou vazio: $SAMPLE_SINGLE" >&2
+    exit 1
+  fi
+else
+  R1="$SAMPLE_R1"
+  R2="$SAMPLE_R2"
+  if [[ ! -s "$R1" || ! -s "$R2" ]]; then
+    echo "[ERRO] FASTQs da amostra não encontrados ou vazios:" >&2
+    echo "       $R1" >&2
+    echo "       $R2" >&2
+    echo "" >&2
+    echo "[DICA] Importe uma amostra com:" >&2
+    echo "  bash scripts/00_import_sample.sh --sample NOME --r1 CAMINHO --r2 CAMINHO [--copy]" >&2
+    echo "[DICA] Amostras detectadas em ${RAW_DIR}:" >&2
+    ls -1 "${RAW_DIR}"/*_R1.fastq.gz 2>/dev/null | sed -E 's#.*/##; s/_R1\.fastq\.gz$//' | sort -u | sed 's/^/  - /' >&2 || true
+    exit 1
+  fi
 fi
 
 
@@ -139,29 +145,12 @@ fi
 
 log "[2/6] Preparando diretórios e bancos"
 make -C "$REPO_ROOT" setup_dirs
-make -C "$REPO_ROOT" db DB="$DB" DB_QUERY="${DB_QUERY:-}"
+  if [[ -n "${DB_QUERY:-}" && -n "${DB_QUERY//[[:space:]]/}" ]]; then
+    make -C "$REPO_ROOT" db DB="$DB" DB_QUERY="$DB_QUERY"
+  else
+    make -C "$REPO_ROOT" db DB="$DB"
+  fi
 
-MISSING_READS=0
-if [[ -n "$SAMPLE_SINGLE" ]]; then
-  if [[ ! -f "$SAMPLE_SINGLE" ]]; then
-    echo "[ERRO] Read single não encontrado: $SAMPLE_SINGLE" >&2
-    MISSING_READS=1
-  fi
-else
-  if [[ ! -f "$SAMPLE_R1" ]]; then
-    echo "[ERRO] Read R1 não encontrado: $SAMPLE_R1" >&2
-    MISSING_READS=1
-  fi
-  if [[ ! -f "$SAMPLE_R2" ]]; then
-    echo "[ERRO] Read R2 não encontrado: $SAMPLE_R2" >&2
-    MISSING_READS=1
-  fi
-fi
-
-if [[ $MISSING_READS -ne 0 ]]; then
-  echo "Sugestão: make run ID=${SAMPLE_ID} R1=/caminho/R1.fastq.gz R2=/caminho/R2.fastq.gz DB=${DB}" >&2
-  exit 1
-fi
 
 if [[ $SKIP_HOST_FILTER -eq 0 ]]; then
   log "[3/6] Filtrando hospedeiro (opcional)"

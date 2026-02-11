@@ -17,7 +17,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 SAMPLE="${1:?SAMPLE obrigatório}"
 KMER="${2:?KMER obrigatório}"
 
-DB="$(resolve_path "${BLAST_DB:-blastdb/ptv}")"
+DB="$(resolve_path "${BLAST_DB:-blastdb/${DB}}")"
 THREADS="${BLAST_THREADS:-4}"
 
 CONTIGS="$(resolve_path "data/assemblies/${SAMPLE}_velvet_k${KMER}/contigs.fa")"

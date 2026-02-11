@@ -7,37 +7,108 @@ REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 CONFIG_FILE="${REPO_ROOT}/config/picornavirus.env"
 LEGACY_CONFIG="${REPO_ROOT}/config.env"
 if [[ -f "${CONFIG_FILE}" ]]; then
+  # shellcheck disable=SC1090
   source "${CONFIG_FILE}"
 elif [[ -f "${LEGACY_CONFIG}" ]]; then
+  # shellcheck disable=SC1090
   source "${LEGACY_CONFIG}"
 fi
 
+# shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/common.sh"
+
+declare -A DB_QUERIES
+declare -A DB_DESC
+
+init_profiles() {
+   DB_QUERIES[ptv]='"Teschovirus"[Organism]'
+   DB_DESC[ptv]='Porcine teschovirus (Teschovirus)'
+
+   DB_QUERIES[evg]='"Enterovirus G"[Organism]'
+   DB_DESC[evg]='Enterovirus G (suínos)'
+
+   DB_QUERIES[psv]='"Sapelovirus A"[Organism]'
+   DB_DESC[psv]='Sapelovirus A (porcine sapelovirus)'
+
+   DB_QUERIES[svv]='"Senecavirus A"[Organism]'
+   DB_DESC[svv]='Senecavirus A'
+
+   DB_QUERIES[fmdv]='"Foot-and-mouth disease virus"[Organism]'
+   DB_DESC[fmdv]='FMDV (aftosa)'
+
+   # ---- Picornaviridae (perfis do UX) ----
+   DB_QUERIES[picornaviridae_refseq]='"Picornaviridae"[Organism] AND refseq[filter]'
+   DB_DESC[picornaviridae_refseq]='Picornaviridae (RefSeq) [recomendado]'
+
+   DB_QUERIES[picornaviridae_complete]='"Picornaviridae"[Organism] AND ("complete genome"[Title] OR "complete cds"[Title])'
+   DB_DESC[picornaviridae_complete]='Picornaviridae (complete genome/cds)'
+
+   DB_QUERIES[picornaviridae_all]='"Picornaviridae"[Organism]'
+   DB_DESC[picornaviridae_all]='Picornaviridae (ALL) [gigante]'
+
+   # (opcional) mantém o alias antigo:
+   DB_QUERIES[picornaviridae]='"Picornaviridae"[Organism]'
+   DB_DESC[picornaviridae]='TODOS Picornaviridae (alias antigo)'
+}
 
 usage() {
   cat <<'USAGE'
 Uso: scripts/13_db_manager.sh <comando>
 
 Comandos:
-  list   lista perfis básicos suportados
+  list   lista perfis básicos suportados (DB -> query NCBI)
   setup  baixa FASTA + gera BLAST DB + índice Bowtie2
 
 Variáveis (env):
   DB             (padrão: ptv)
-  DB_QUERY       (padrão: "\"Teschovirus\"[Organism]")
+  DB_QUERY       (se definido, sobrescreve a query padrão do perfil)
+  NCBI_DB        (padrão: nucleotide)
+
   REF_FASTA      (padrão: data/ref/<DB>.fa)
   BLAST_DB       (padrão: blastdb/<DB>)
   BOWTIE2_INDEX  (padrão: bowtie2/<DB>)
+
+Exemplos:
+  scripts/13_db_manager.sh list
+  DB=evg scripts/13_db_manager.sh setup
+  DB=custom DB_QUERY='"Porcine kobuvirus"[All Fields]' scripts/13_db_manager.sh setup
 USAGE
 }
 
+init_profiles
+
 CMD="${1:-}"
 case "$CMD" in
-  list)
+    list)
+    if [[ "${2:-}" == "--json" ]]; then
+      cat <<'JSON'
+[
+  {"id":"ptv","label":"Teschovirus (PTV)","query":"\"Teschovirus\"[Organism]"},
+  {"id":"evg","label":"Enterovirus G","query":"\"Enterovirus G\"[Organism]"},
+  {"id":"psv","label":"Sapelovirus A","query":"\"Sapelovirus A\"[Organism]"},
+  {"id":"svv","label":"Senecavirus A","query":"\"Senecavirus A\"[Organism]"},
+  {"id":"fmdv","label":"Foot-and-mouth disease virus (FMDV)","query":"\"Foot-and-mouth disease virus\"[Organism]"},
+
+  {"id":"picornaviridae_refseq","label":"Picornaviridae (RefSeq) [recomendado]","query":"\"Picornaviridae\"[Organism] AND refseq[filter]"},
+  {"id":"picornaviridae_complete","label":"Picornaviridae (complete genome/cds)","query":"\"Picornaviridae\"[Organism] AND (\"complete genome\"[Title] OR \"complete cds\"[Title])"},
+  {"id":"picornaviridae_all","label":"Picornaviridae (ALL) [gigante]","query":"\"Picornaviridae\"[Organism]"}
+]
+JSON
+      exit 0
+    fi
+
     printf "DB\tQuery\n"
     printf "ptv\t\"Teschovirus\"[Organism]\n"
+    printf "evg\t\"Enterovirus G\"[Organism]\n"
+    printf "psv\t\"Sapelovirus A\"[Organism]\n"
+    printf "svv\t\"Senecavirus A\"[Organism]\n"
+    printf "fmdv\t\"Foot-and-mouth disease virus\"[Organism]\n"
+    printf "picornaviridae_refseq\t\"Picornaviridae\"[Organism] AND refseq[filter]\n"
+    printf "picornaviridae_complete\t\"Picornaviridae\"[Organism] AND (\"complete genome\"[Title] OR \"complete cds\"[Title])\n"
+    printf "picornaviridae_all\t\"Picornaviridae\"[Organism]\n"
     exit 0
     ;;
+
   setup)
     ;;
   -h|--help|"")
@@ -51,7 +122,15 @@ case "$CMD" in
 esac
 
 DB="${DB:-ptv}"
-DB_QUERY="${DB_QUERY:-\"Teschovirus\"[Organism]}"
+NCBI_DB="${NCBI_DB:-nucleotide}"
+
+DEFAULT_QUERY="${DB_QUERIES[$DB]:-}"
+DB_QUERY="${DB_QUERY:-$DEFAULT_QUERY}"
+
+if [[ -z "${DB_QUERY}" ]]; then
+  log_error "DB_QUERY vazio e DB '${DB}' não tem perfil conhecido. Use DB_QUERY=... ou DB=ptv/evg/psv/svv/fmdv/picornaviridae_refseq/picornaviridae_complete/picornaviridae_all."
+fi
+
 REF_FASTA="$(resolve_path "${REF_FASTA:-data/ref/${DB}.fa}")"
 BLAST_DB="$(resolve_path "${BLAST_DB:-blastdb/${DB}}")"
 BOWTIE2_INDEX="$(resolve_path "${BOWTIE2_INDEX:-bowtie2/${DB}}")"
@@ -61,8 +140,8 @@ mkdir -p "$(dirname "$REF_FASTA")" "$(dirname "$BLAST_DB")" "$(dirname "$BOWTIE2
 if [[ ! -s "$REF_FASTA" ]]; then
   command -v esearch >/dev/null 2>&1 || log_error "EDirect não encontrado (esearch). Instale EDirect."
   command -v efetch  >/dev/null 2>&1 || log_error "EDirect não encontrado (efetch). Instale EDirect."
-  log_info "Baixando FASTA (DB_QUERY=${DB_QUERY})..."
-  esearch -db nucleotide -query "$DB_QUERY" | efetch -format fasta > "$REF_FASTA"
+  log_info "Baixando FASTA (NCBI_DB=${NCBI_DB}; DB_QUERY=${DB_QUERY})..."
+  esearch -db "$NCBI_DB" -query "$DB_QUERY" | efetch -format fasta > "$REF_FASTA"
   if [[ ! -s "$REF_FASTA" ]]; then
     log_error "Download falhou, FASTA vazio: $REF_FASTA"
   fi
@@ -112,3 +191,5 @@ if [[ $bt2_missing -eq 1 ]]; then
 else
   log_info "Índice Bowtie2 atualizado: $BOWTIE2_INDEX"
 fi
+
+log_info "OK (DB=${DB})"

@@ -15,7 +15,9 @@ fi
 source "${SCRIPT_DIR}/lib/common.sh"
 
 # Arquivos de entrada/saída
-REF_FA="data/ptv_db.fa"
+REF_FA="${REF_FA:-${REF_FASTA:-data/ptv_db.fa}}"
+# (legado) se existir data/ref/ptv_db.fa, prefira
+if [[ -z "${REF_FASTA:-}" && -e "data/ref/ptv_db.fa" ]]; then REF_FA="data/ref/ptv_db.fa"; fi
 FRAG_FA="run_T1/work/ptv_hits_fragments.fa"
 MERGED_FA="run_T1/work/ptv_fragments_plus_ref.fa"
 ALN_FA="run_T1/work/ptv_fragments_plus_ref.aln.fa"

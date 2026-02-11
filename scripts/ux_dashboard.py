@@ -54,6 +54,22 @@ def list_targets():
         return []
     return data if isinstance(data, list) else []
 
+def list_db_profiles():
+    try:
+        completed = run(
+            ["bash", "-lc", "scripts/13_db_manager.sh list --json"],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            return []
+        data = json.loads(completed.stdout or "[]")
+        return data if isinstance(data, list) else []
+    except Exception:
+        return []
+
 
 def validate_fastq_name(name):
     return name.endswith(".fastq") or name.endswith(".fastq.gz")
@@ -197,15 +213,28 @@ def build_command(action, params):
         return cmd, {}
     if action == "pipeline":
         sample = params.get("sample")
-        if not sample:
-            raise ValueError("Campo obrigatório ausente: sample")
-        assembler = (params.get("assembler") or "velvet").lower()
-        kmer = params.get("kmer") or "31"
-        cmd = ["bash", "scripts/20_run_pipeline.sh", "--sample", sample, "--kmer", str(kmer)]
-        env = {}
-        if assembler in {"velvet", "spades"}:
-            env["ASSEMBLER"] = assembler
-        return cmd, env
+    if not sample:
+        raise ValueError("Campo obrigatório ausente: sample")
+
+    assembler = (params.get("assembler") or "velvet").lower()
+    kmer = params.get("kmer") or "31"
+
+    # >>> NOVO: DB selecionável via UX
+    db = (params.get("db") or "").strip()
+
+    cmd = ["bash", "scripts/20_run_pipeline.sh", "--sample", sample, "--kmer", str(kmer)]
+    env = {}
+
+    if assembler in {"velvet", "spades"}:
+        env["ASSEMBLER"] = assembler
+
+    if db:
+        env["DB"] = db   # usado pelo 13_db_manager.sh e/ou pipeline
+        # opcional: também passar por argumento se teu 20_run_pipeline.sh suportar
+        # cmd += ["--db", db]
+
+    return cmd, env
+
     raise ValueError("Ação inválida")
 
 
@@ -233,8 +262,31 @@ def run_job(job_id, action, params):
         jobs[job_id].update({"status": "running", "command": " ".join(cmd), "log_path": str(log_path.relative_to(REPO_ROOT))})
 
     process = Popen(cmd, cwd=REPO_ROOT, env=env, stdout=PIPE, stderr=STDOUT, text=True, bufsize=1)
+
     output_lines = []
     with log_path.open("w", encoding="utf-8") as log_file:
+        # prepara DB automaticamente quando existir DB no env
+        if env.get("DB"):
+            log_file.write(f"[INFO] Preparando DB via 13_db_manager.sh (DB={env['DB']})...\n")
+            log_file.flush()
+
+            completed = run(
+                ["bash", "scripts/13_db_manager.sh", "setup"],
+                cwd=REPO_ROOT,
+                env=env,
+                stdout=PIPE,
+                stderr=STDOUT,
+                text=True,
+                check=False,
+            )
+            if completed.stdout:
+                log_file.write(completed.stdout)
+                log_file.flush()
+                output_lines.extend(completed.stdout.splitlines(True))
+                output_lines = clamp_output(output_lines)
+                with jobs_lock:
+                    jobs[job_id]["output"] = output_lines
+
         if process.stdout:
             for line in process.stdout:
                 log_file.write(line)
@@ -243,7 +295,6 @@ def run_job(job_id, action, params):
                 output_lines = clamp_output(output_lines)
                 with jobs_lock:
                     jobs[job_id]["output"] = output_lines
-
     returncode = process.wait()
     end_epoch = time.time()
 
@@ -401,12 +452,20 @@ class DashboardHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/":
             return serve_file(self, DASHBOARD_DIR / "index.html", "text/html; charset=utf-8")
+        if parsed.path == "/api/dbs":
+            return json_response(self, HTTPStatus.OK, {"dbs": list_db_profiles()})
         if parsed.path == "/styles.css":
             return serve_file(self, DASHBOARD_DIR / "styles.css", "text/css; charset=utf-8")
         if parsed.path == "/app.js":
             return serve_file(self, DASHBOARD_DIR / "app.js", "application/javascript; charset=utf-8")
         if parsed.path == "/api/samples":
             return json_response(self, HTTPStatus.OK, {"samples": list_samples()})
+        if parsed.path == "/api/targets":
+            return json_response(self, HTTPStatus.OK, {"targets": list_targets()})
+        if parsed.path == "/api/history":
+            return json_response(self, HTTPStatus.OK, {"runs": list_run_history()})
+        ...
+
         if parsed.path == "/api/targets":
             return json_response(self, HTTPStatus.OK, {"targets": list_targets()})
         if parsed.path == "/api/history":

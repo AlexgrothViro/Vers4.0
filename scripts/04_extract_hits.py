@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse, os, sys, statistics as st
+import os
 from collections import defaultdict
 
 def read_fasta(path):
@@ -58,13 +59,22 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sample", required=True)
     ap.add_argument("--kmer", required=True, type=int)
-    ap.add_argument("--ref", default="data/ref/ptv_db.fa")
+    ap.add_argument("--ref", default=None)
     ap.add_argument("--min-pident", type=float, default=90.0)
     ap.add_argument("--min-aln-len", type=int, default=50)
     ap.add_argument("--tsv", default=None, help="opcional: caminho explícito do TSV BLAST")
     ap.add_argument("--contigs", default=None, help="opcional: caminho explícito do contigs.fa")
     args = ap.parse_args()
 
+
+    # Default ref: respeita --ref, depois $REF_FASTA, depois data/ref/${DB}.fa, senão fallback PTV legado
+    if args.ref is None:
+        db = os.environ.get("DB", "ptv")
+        args.ref = os.environ.get("REF_FASTA") or f"data/ref/{db}.fa"
+        # fallback legado (projeto antigo)
+        db = os.environ.get("DB", "ptv")
+        if (db in ("ptv", "", None)) and (not os.path.exists(args.ref)) and os.path.exists("data/ref/ptv_db.fa"):
+            args.ref = "data/ref/ptv_db.fa"
     sample = args.sample
     k = args.kmer
 

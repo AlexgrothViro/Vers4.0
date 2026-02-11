@@ -100,12 +100,12 @@ for cmd in "${OPTIONAL_CMDS[@]}"; do
 done
 
 echo
-REF_FASTA="${REF_FASTA:-data/ref/ptv_db.fa}"
-LEGACY_FASTA="data/ptv_db.fa"
+REF_FASTA="${REF_FASTA:-data/ref/${DB:-ptv}.fa}"
+LEGACY_FASTA="data/${DB}_db.fa"
 
 if [[ -s "$REF_FASTA" ]]; then
   echo "FASTA de referência encontrado: $REF_FASTA"
-  if [[ "$REF_FASTA" == "data/ref/ptv_db.fa" && ! -e "$LEGACY_FASTA" ]]; then
+  if [[ -e "data/ref/ptv_db.fa" && "$REF_FASTA" == "data/ref/ptv_db.fa" && ! -e "$LEGACY_FASTA" ]]; then
     mkdir -p data
     ln -sf "$(resolve_path "$REF_FASTA")" "$LEGACY_FASTA"
     echo "  [INFO] Symlink criado: $LEGACY_FASTA -> $REF_FASTA"
@@ -117,11 +117,20 @@ elif compgen -G "data/ref/*.fa" >/dev/null; then
   ls -1 data/ref/*.fa
 else
   echo "ATENÇÃO: FASTA de referência ausente em data/ref/*.fa."
-  echo "  Sugestão: make ptv-fasta   # cria data/ref/ptv_db.fa"
+  echo "  Sugestão: make db DB=${DB:-ptv}   # cria data/ref/<db>.fa e bancos"
 fi
 
 if ! command -v esearch >/dev/null 2>&1 || ! command -v efetch >/dev/null 2>&1; then
   echo "AVISO: EDirect ausente (esearch/efetch) - necessário para baixar FASTA do NCBI."
+fi
+
+DB="${DB:-ptv}"
+# BLAST_DB_AUTODETECT: se não setado, tenta usar blastdb/<DB> se existir
+if [[ -z "${BLAST_DB:-}" ]]; then
+  if compgen -G "blastdb/${DB}.*" >/dev/null; then
+    BLAST_DB="blastdb/${DB}"
+    export BLAST_DB
+  fi
 fi
 
 if [[ -n "${BLAST_DB:-}" ]]; then
@@ -140,7 +149,7 @@ if [[ -n "${BLAST_DB:-}" ]]; then
   fi
 else
   echo "ATENÇÃO: variável de ambiente BLAST_DB não definida."
-  echo "  Sugestão: make blastdb   # gera blastdb/ptv e exporte BLAST_DB=blastdb/ptv"
+  echo "  Sugestão: make blastdb DB=$DB   # gera blastdb/$DB e exporte BLAST_DB=blastdb/$DB"
 fi
 
 if [[ $MISSING -ne 0 ]]; then

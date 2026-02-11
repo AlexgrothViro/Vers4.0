@@ -20,8 +20,8 @@ RAW_DIR="$(resolve_path "${RAW_DIR:-data/raw}")"
 ASSEMBLY_DIR="$(resolve_path "${ASSEMBLY_DIR:-data/assemblies}")"
 PTV_ENRICHED_DIR="$(resolve_path "${PTV_ENRICHED_DIR:-data/ptv_enriched}")"
 RESULTS_DIR="$(resolve_path "${RESULTS_DIR:-results}")"
-BOWTIE2_INDEX="$(resolve_path "${BOWTIE2_INDEX:-bowtie2/ptv}")"
-BLAST_DB_PATH="$(resolve_path "${BLAST_DB:-blastdb/ptv}")"
+BOWTIE2_INDEX="$(resolve_path "${BOWTIE2_INDEX:-bowtie2/${DB:-ptv}}")"
+BLAST_DB_PATH="$(resolve_path "${BLAST_DB:-blastdb/${DB:-ptv}}")"
 
 # aceita SAMPLE=XXXX_PTV ou SAMPLE=XXXX
 if [[ "$SAMPLE_IN" == *_PTV ]]; then

@@ -1,8 +1,9 @@
+import os
 #!/usr/bin/env python3
 import sys, csv
 
 PLAN   = "run_T1/work/extend_plan.tsv"
-REF_FA = "data/ptv_db.fa"
+REF_FA = os.environ.get("REF_FA") or os.environ.get("REF_FASTA") or f"data/ref/{os.environ.get("DB","ptv")}.fa"
 OUTFA  = "run_T1/work/extend_regions.fasta"
 
 def read_fasta(path):

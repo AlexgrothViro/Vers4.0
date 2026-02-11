@@ -4,26 +4,28 @@ SHELL := /bin/bash
 
 SCRIPTS_DIR := scripts
 
-# Parâmetros padrão (podem ser sobrescritos: SAMPLE=... KMER=...)
+# Parâmetros padrão (podem ser sobrescritos: SAMPLE= KMER=)
 SAMPLE ?= 81554_S150
 KMER   ?= 31
 ID     ?= amostra_teste
 R1     ?=
 R2     ?=
 SINGLE ?=
-DB     ?= ptv
-DB_QUERY ?=
-KMERS ?=
+DB      ?= ptv
+DB_QUERY ?= "\"Teschovirus\"[Organism]"
+
+
+KMERS   ?=
+THREADS ?= 4
 
 # Caminhos padrão (podem ser sobrescritos via ambiente ou linha de comando)
 REF_DIR       ?= data/ref
-REF_FASTA     ?= $(REF_DIR)/ptv_db.fa
-BLAST_DB      ?= blastdb/ptv
-BOWTIE2_INDEX ?= bowtie2/ptv
-
+REF_FASTA     ?= $(REF_DIR)/$(DB).fa
+BLAST_DB      ?= blastdb/$(DB)
+BOWTIE2_INDEX ?= bowtie2/$(DB)
 .PHONY: help setup_dirs deps test-env filter-host test-velvet test-blast \
   ptv-fasta ptv-fasta-legacy blastdb bowtie2-index pipeline test clean fix-wsl \
-	db db-list sample-add run
+  db db-list sample-add run smoke-test
 
 -include config/picornavirus.env
 -include config.env
@@ -47,7 +49,7 @@ help:
 	@echo "  make setup_dirs             # cria estrutura básica (data/, results/, docs/)
 	@echo "  make demo                  # gera FASTQ demo reprodutível em data/raw (DEMO_R1/R2)"
 	@echo "  make ptv-fasta              # baixa/gera FASTA de PTV em $(REF_FASTA)"
-	@echo "  make ptv-fasta-legacy       # cria symlink data/ptv_db.fa -> $(REF_FASTA)"
+	@echo "  make ptv-fasta-legacy       # cria symlink data/$(DB)_db.fa -> $(REF_FASTA)"
 	@echo "  make blastdb                # gera banco BLAST em $(BLAST_DB) (usa $(REF_FASTA))"
 	@echo "  make bowtie2-index          # gera índice Bowtie2 em $(BOWTIE2_INDEX) (usa $(REF_FASTA))"
 	@echo "  make db                     # prepara FASTA + BLAST DB + Bowtie2 (via db_manager)"
@@ -90,8 +92,7 @@ ptv-fasta: setup_dirs
 
 ptv-fasta-legacy: ptv-fasta
 	mkdir -p data
-	ln -sf "$(abspath $(REF_FASTA))" data/ptv_db.fa
-
+	ln -sf "$(abspath $(REF_FASTA))" data/$(DB)_db.fa
 blastdb: ptv-fasta
 	mkdir -p $(dir $(BLAST_DB))
 	if [[ -s "$(BLAST_DB).nhr" && -s "$(BLAST_DB).nin" && -s "$(BLAST_DB).nsq" && "$(BLAST_DB).nhr" -nt "$(REF_FASTA)" ]]; then
@@ -116,12 +117,9 @@ pipeline:
 	BLAST_DB="$(BLAST_DB)" BOWTIE2_INDEX="$(BOWTIE2_INDEX)" scripts/20_run_pipeline.sh --sample "$(SAMPLE)"
 
 db:
-	DB="$(DB)" DB_QUERY="$(DB_QUERY)" REF_FASTA="$(REF_FASTA)" \
+	DB="$(DB)" REF_FASTA="$(REF_FASTA)" \
 	BLAST_DB="$(BLAST_DB)" BOWTIE2_INDEX="$(BOWTIE2_INDEX)" \
 	$(SCRIPTS_DIR)/13_db_manager.sh setup
-
-db-list:
-	$(SCRIPTS_DIR)/13_db_manager.sh list
 
 sample-add:
 	ARGS=(--id "$(ID)")
@@ -130,17 +128,6 @@ sample-add:
 	if [[ -n "$(SINGLE)" ]]; then ARGS+=(--single "$(SINGLE)"); fi
 	if [[ -n "$(COPY)" ]]; then ARGS+=(--copy); fi
 	$(SCRIPTS_DIR)/12_stage_sample.sh "$${ARGS[@]}"
-
-run: sample-add db
-	RUN_R1=""
-	RUN_R2=""
-	RUN_SINGLE=""
-	if [[ -n "$(R1)" ]]; then RUN_R1="data/raw/$(ID)_R1.fastq.gz"; fi
-	if [[ -n "$(R2)" ]]; then RUN_R2="data/raw/$(ID)_R2.fastq.gz"; fi
-	if [[ -n "$(SINGLE)" ]]; then RUN_SINGLE="data/raw/$(ID).fastq.gz"; fi
-	SAMPLE_ID="$(ID)" SAMPLE_R1="$$RUN_R1" SAMPLE_R2="$$RUN_R2" SAMPLE_SINGLE="$$RUN_SINGLE" \
-	DB="$(DB)" DB_QUERY="$(DB_QUERY)" THREADS="$(THREADS)" KMERS="$(KMERS)" \
-	$(SCRIPTS_DIR)/20_run_pipeline.sh
 
 filter-host:
 	$(SCRIPTS_DIR)/03_filter_host.sh $(SAMPLE)
@@ -183,31 +170,6 @@ test-bundle-wsl:
 	bash scripts/99_test_bundle_wsl.sh "$(BUNDLE_TAG)"
 
 test-all: test test-bundle-wsl
-# ---- DB convenience targets ----
-# Observação: existe um diretório chamado "db/" no repo.
-# Para permitir "make db", este alvo é PHONY (não conflita com a pasta).
-DB ?= ptv
-
-.PHONY: db db-list host-db
-
-db-list:
-	@echo "DBs disponíveis:"
-	@echo "  ptv   -> baixa FASTA (NCBI), gera BLAST DB e índice Bowtie2"
-	@echo "  host  -> baixa hospedeiro (Sus scrofa) e gera índice Bowtie2 (opcional)"
-	@echo "  all   -> ptv + host"
-	@echo
-	@echo "Uso:"
-	@echo "  make db DB=ptv"
-	@echo "  make db DB=host"
-	@echo "  make db DB=all"
-
-db:
-	@case "$(DB)" in \
-		ptv)  $(MAKE) ptv-fasta ptv-fasta-legacy blastdb bowtie2-index ;; \
-		host) $(MAKE) host-db ;; \
-		all)  $(MAKE) db DB=ptv; $(MAKE) db DB=host ;; \
-		*)    echo "[ERRO] DB inválido: $(DB)"; $(MAKE) db-list; exit 2 ;; \
-	esac
 
 # Gera índice Bowtie2 do hospedeiro em ref/host/sus_scrofa_bt2*
 # (A pipeline hoje procura por ref/host/sus_scrofa_bt2.1.bt2)
@@ -248,9 +210,48 @@ check-env: test-env
 	@:
 
 
-.PHONY: demo
+.PHONY: demo ux run report run-demo report-demo db-list db-setup
+
+# Defaults (sobrescreva na linha de comando)
+SAMPLE ?=
+R1 ?=
+R2 ?=
+
 demo: ptv-fasta
 	python3 scripts/97_make_demo_fastq.py --ref "$(REF_FASTA)" --outdir data/raw --sample DEMO --pairs 2000 --len 150 --insert 300
 
 ux:
 	python3 scripts/ux_dashboard.py --host 0.0.0.0 --port 8000
+
+db-list:
+	DB="$(DB)" scripts/13_db_manager.sh list
+
+db-setup:
+	DB="$(DB)" scripts/13_db_manager.sh setup
+
+run:
+	@if [[ -z "$(SAMPLE)" || -z "$(R1)" || -z "$(R2)" ]]; then \
+	  echo "Uso: make run SAMPLE=<id> R1=<R1.fastq.gz> R2=<R2.fastq.gz> [DB=ptv]"; \
+	  exit 2; \
+	fi
+	DB="$(DB)" \
+	BLAST_DB="blastdb/$(DB)" BOWTIE2_INDEX="bowtie2/$(DB)" \
+	SAMPLE="$(SAMPLE)" R1="$(R1)" R2="$(R2)" \
+	scripts/20_run_demo.sh
+
+report:
+	@if [[ -z "$(SAMPLE)" ]]; then \
+	  echo "Uso: make report SAMPLE=<id>"; \
+	  exit 2; \
+	fi
+	@echo "[INFO] Abrindo relatório: results/reports/$(SAMPLE).report.md"
+	@ls -lh "results/reports/$(SAMPLE).report.md"
+	@echo "==== REPORT (head) ===="
+	@sed -n '1,200p' "results/reports/$(SAMPLE).report.md"
+	@echo "======================="
+
+run-demo:
+	@$(MAKE) run SAMPLE=DEMO R1=data/raw/DEMO_R1.fastq.gz R2=data/raw/DEMO_R2.fastq.gz DB=ptv
+
+report-demo:
+	@$(MAKE) report SAMPLE=DEMO

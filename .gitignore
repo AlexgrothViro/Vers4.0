@@ -34,3 +34,24 @@ blastdb/
 bowtie2/
 tmp/
 *.bak.*
+
+# backups / temporários
+*.bak
+*.bak_*
+*BROKEN*.bak
+*.swp
+*.tmp
+
+# dados gerados / outputs grandes
+db/
+data/
+results/
+*.fastq
+*.fastq.gz
+*.fasta
+*.fa
+*.sam
+*.bam
+*.bt2
+blastdb/
+bowtie2/
