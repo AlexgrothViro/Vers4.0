@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+DB="${DB:-ptv}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
