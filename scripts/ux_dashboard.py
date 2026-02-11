@@ -200,17 +200,23 @@ def build_command(action, params):
             cmd.append("--copy")
         return cmd, {}
     if action == "build_db":
-        target = params.get("target")
-        query = (params.get("query") or "").strip()
-        taxid = (params.get("taxid") or "").strip()
-        if not target:
-            raise ValueError("Campo obrigatório ausente: target")
-        cmd = ["bash", "scripts/10_build_viral_db.sh", "--target", target]
-        if query:
-            cmd += ["--query", query]
-        elif taxid:
-            cmd += ["--taxid", taxid]
-        return cmd, {}
+        # NOVO: usa o db_manager (perfis + query custom)
+        db = (params.get("db") or params.get("target") or "").strip()
+        db_query = (params.get("db_query") or params.get("query") or "").strip()
+        ncbi_db = (params.get("ncbi_db") or "").strip()
+    
+        if not db:
+            raise ValueError("Campo obrigatório ausente: db (ou target)")
+    
+        cmd = ["bash", "scripts/13_db_manager.sh", "setup"]
+        env = {"DB": db}
+    
+        if db_query:
+            env["DB_QUERY"] = db_query
+        if ncbi_db:
+            env["NCBI_DB"] = ncbi_db
+    
+        return cmd, env
     if action == "pipeline":
         sample = params.get("sample")
     if not sample:
@@ -221,6 +227,7 @@ def build_command(action, params):
 
     # >>> NOVO: DB selecionável via UX
     db = (params.get("db") or "").strip()
+    db_query = (params.get("db_query") or "").strip()
 
     cmd = ["bash", "scripts/20_run_pipeline.sh", "--sample", sample, "--kmer", str(kmer)]
     env = {}
@@ -230,6 +237,8 @@ def build_command(action, params):
 
     if db:
         env["DB"] = db   # usado pelo 13_db_manager.sh e/ou pipeline
+        if db_query:
+            env["DB_QUERY"] = db_query
         # opcional: também passar por argumento se teu 20_run_pipeline.sh suportar
         # cmd += ["--db", db]
 
