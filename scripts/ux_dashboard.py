@@ -186,8 +186,10 @@ def parse_pipeline_details(params):
 def build_command(action, params):
     if action == "check_env":
         return ["make", "test-env"], {}
+
     if action == "demo":
         return ["make", "demo"], {}
+
     if action == "import_sample":
         sample = params.get("sample")
         r1 = params.get("r1")
@@ -199,50 +201,58 @@ def build_command(action, params):
         if copy:
             cmd.append("--copy")
         return cmd, {}
+
     if action == "build_db":
-        # NOVO: usa o db_manager (perfis + query custom)
-        db = (params.get("db") or params.get("target") or "").strip()
+        # aceita tanto params['db'] quanto params['target'] (legado)
+        raw = (params.get("db") or params.get("target") or "").strip()
+        if not raw:
+            raise ValueError("Campo obrigatório ausente: db/target")
+
+        # aliases legado -> IDs do 13_db_manager.sh
+        alias = {
+            "enterovirus_g": "evg",
+            "sapelovirus_a": "psv",
+            "teschovirus_a": "ptv",
+            "teschovirus": "ptv",
+        }
+        db = alias.get(raw.lower(), raw)
+
+        # aceita query em params['query'] (legado) ou params['db_query'] (novo)
         db_query = (params.get("db_query") or params.get("query") or "").strip()
         ncbi_db = (params.get("ncbi_db") or "").strip()
-    
-        if not db:
-            raise ValueError("Campo obrigatório ausente: db (ou target)")
-    
+
         cmd = ["bash", "scripts/13_db_manager.sh", "setup"]
         env = {"DB": db}
-    
         if db_query:
             env["DB_QUERY"] = db_query
         if ncbi_db:
             env["NCBI_DB"] = ncbi_db
-    
+
         return cmd, env
+
     if action == "pipeline":
         sample = params.get("sample")
-    if not sample:
-        raise ValueError("Campo obrigatório ausente: sample")
+        if not sample:
+            raise ValueError("Campo obrigatório ausente: sample")
 
-    assembler = (params.get("assembler") or "velvet").lower()
-    kmer = params.get("kmer") or "31"
+        assembler = (params.get("assembler") or "velvet").lower()
+        kmer = params.get("kmer") or "31"
 
-    # >>> NOVO: DB selecionável via UX
-    db = (params.get("db") or "").strip()
-    db_query = (params.get("db_query") or "").strip()
+        db = (params.get("db") or "").strip()
+        db_query = (params.get("db_query") or "").strip()
 
-    cmd = ["bash", "scripts/20_run_pipeline.sh", "--sample", sample, "--kmer", str(kmer)]
-    env = {}
+        cmd = ["bash", "scripts/20_run_pipeline.sh", "--sample", sample, "--kmer", str(kmer)]
+        env = {}
 
-    if assembler in {"velvet", "spades"}:
-        env["ASSEMBLER"] = assembler
+        if assembler in {"velvet", "spades"}:
+            env["ASSEMBLER"] = assembler
 
-    if db:
-        env["DB"] = db   # usado pelo 13_db_manager.sh e/ou pipeline
-        if db_query:
-            env["DB_QUERY"] = db_query
-        # opcional: também passar por argumento se teu 20_run_pipeline.sh suportar
-        # cmd += ["--db", db]
+        if db:
+            env["DB"] = db
+            if db_query:
+                env["DB_QUERY"] = db_query
 
-    return cmd, env
+        return cmd, env
 
     raise ValueError("Ação inválida")
 
