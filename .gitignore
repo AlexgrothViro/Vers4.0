@@ -1,57 +1,49 @@
-# Outputs / dados locais (não versionar)
-data/raw/
-data/cleaned/
-data/host_removed/
-data/assemblies/
-data/ptv_enriched/
-results/
-blastdb/
-bowtie2/
+# =========================
+# Outputs / dados locais
+# =========================
 
-# caches/logs
-__pycache__/
-*.pyc
-*.log
-.tmp/
-
-# Referências/entradas locais (baixadas/geradas) e amostras
-data/ref/
-data/*.fa
-amostra/
-# config local (não versionar)
-config.env
-
-# bancos gerados
-data/db/
-dist/
-tmp/
-
-# --- bioinfo artefacts (não versionar) ---
+# Pastas de pipeline (geradas)
 data/
 results/
 logs/
+tmp/
+dist/
+
+# Índices / bancos gerados localmente
 blastdb/
 bowtie2/
-tmp/
-*.bak.*
 
-# backups / temporários
-*.bak
-*.bak_*
-*BROKEN*.bak
-*.swp
-*.tmp
-
-# dados gerados / outputs grandes
+# DBs locais (se você quiser versionar "db/" no futuro, remova esta linha)
 db/
-data/
-results/
+
+# =========================
+# Bioinfo artefacts
+# =========================
 *.fastq
 *.fastq.gz
+*.fq
+*.fq.gz
 *.fasta
 *.fa
+*.fna
 *.sam
 *.bam
 *.bt2
-blastdb/
-bowtie2/
+
+# =========================
+# Temporários / backups
+# =========================
+__pycache__/
+*.pyc
+*.log
+*.swp
+*.tmp
+*.bak
+*.bak_*
+*.bak.*
+*BROKEN*.bak
+
+# =========================
+# Config local (não versionar)
+# =========================
+config.env
