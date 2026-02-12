@@ -81,6 +81,18 @@ resolve_existing_file() {
   return 1
 }
 
+sanitize_sample() {
+  local raw="$1"
+  raw="${raw%\"}"
+  raw="${raw#\"}"
+  raw="${raw%$'\r'}"
+  raw="${raw// /_}"
+  raw="$(printf '%s' "$raw" | LC_ALL=C tr -cs 'A-Za-z0-9_.-' '_')"
+  raw="${raw#_}"; raw="${raw%_}"
+  raw="${raw:0:80}"
+  printf '%s\n' "$raw"
+}
+
 check_ext() {
   local file="$1"
   [[ "$file" =~ \.fastq$ || "$file" =~ \.fastq\.gz$ ]] || {
@@ -101,6 +113,17 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "$SAMPLE" && -n "$R1" && -n "$R2" ]] || { echo "[ERRO] faltou --sample/--r1/--r2"; usage; exit 2; }
+
+SAMPLE_RAW="$SAMPLE"
+SAMPLE="$(sanitize_sample "$SAMPLE_RAW")"
+if [[ -z "$SAMPLE" ]]; then
+  echo "[ERRO] sample inválido após sanitização: $SAMPLE_RAW" >&2
+  exit 2
+fi
+if [[ "$SAMPLE" != "$SAMPLE_RAW" ]]; then
+  echo "[INFO] sample sanitizado: '$SAMPLE_RAW' -> '$SAMPLE'"
+fi
+
 
 R1="$(normalize_windows_path "$R1")"
 R2="$(normalize_windows_path "$R2")"

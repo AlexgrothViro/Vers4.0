@@ -47,3 +47,6 @@ __pycache__/
 # Config local (não versionar)
 # =========================
 config.env
+
+# bundle env (local)
+.bundle/
