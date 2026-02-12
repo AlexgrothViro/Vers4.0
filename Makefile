@@ -46,7 +46,7 @@ cfg-blast:
 help:
 	@echo "Alvos disponíveis:"
 	@echo "  make deps                  # instala dependências (apt-get) e roda check de ambiente"
-	@echo "  make setup_dirs             # cria estrutura básica (data/, results/, docs/)
+	@echo "  make setup_dirs             # cria estrutura básica (data/, results/, docs/)"
 	@echo "  make demo                  # gera FASTQ demo reprodutível em data/raw (DEMO_R1/R2)"
 	@echo "  make ptv-fasta              # baixa/gera FASTA de PTV em $(REF_FASTA)"
 	@echo "  make ptv-fasta-legacy       # cria symlink data/$(DB)_db.fa -> $(REF_FASTA)"
@@ -237,7 +237,7 @@ run:
 	DB="$(DB)" \
 	BLAST_DB="blastdb/$(DB)" BOWTIE2_INDEX="bowtie2/$(DB)" \
 	SAMPLE="$(SAMPLE)" R1="$(R1)" R2="$(R2)" \
-	scripts/20_run_demo.sh
+	scripts/20_run_pipeline.sh
 
 report:
 	@if [[ -z "$(SAMPLE)" ]]; then \
