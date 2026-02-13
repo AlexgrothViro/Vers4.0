@@ -25,6 +25,9 @@ const envFileStatusEl = getEl("env-file-status");
 const envMtimeEl = getEl("env-mtime");
 const envPathEl = getEl("env-path");
 
+// Constants
+const JOB_POLL_INTERVAL_MS = 1200;
+
 // State to remember last selected DB
 let currentDB = {
   target: null,
@@ -298,7 +301,7 @@ const saveConfigEnv = async (event) => {
   
   // Collect non-empty values
   for (const [key, value] of formData.entries()) {
-    if (key !== "submit" && value.trim()) {
+    if (value.trim()) {
       config[key] = value.trim();
     }
   }
@@ -375,7 +378,7 @@ const rebuildEnvironment = async () => {
         rebuildStatusEl.className = "final-status error";
         rebuildStatusEl.innerHTML = `<strong>ERRO</strong> ❌<pre>${jobData.tail || "Falha ao recriar ambiente"}</pre>`;
       }
-    }, 1200);
+    }, JOB_POLL_INTERVAL_MS);
   } catch (err) {
     rebuildStatusEl.className = "final-status error";
     rebuildStatusEl.innerHTML = `<strong>ERRO</strong> ❌ ${err.message}`;
@@ -434,7 +437,7 @@ const pollJob = (jobId, action) => {
     clearInterval(interval);
     fetchSamples();
     fetchHistory();
-  }, 1200);
+  }, JOB_POLL_INTERVAL_MS);
 };
 
 const uploadImport = async (formData) => {

@@ -165,6 +165,9 @@ def save_config_env(updates):
     existing_lines = []
     existing_keys = set()
     
+    BASH_VAR_PREFIX = ": \"${"
+    BASH_VAR_PREFIX_LEN = len(BASH_VAR_PREFIX)
+    
     if env_path.exists():
         content = env_path.read_text(encoding="utf-8")
         for line in content.splitlines():
@@ -173,8 +176,8 @@ def save_config_env(updates):
             if stripped and not stripped.startswith("#") and "=" in stripped:
                 key = stripped.split("=")[0].strip()
                 # Remove bash syntax if present
-                if key.startswith(": \"${"):
-                    key = key[5:].split(":")[0]
+                if key.startswith(BASH_VAR_PREFIX):
+                    key = key[BASH_VAR_PREFIX_LEN:].split(":")[0]
                 existing_keys.add(key)
                 
                 # Update line if this key is being updated
