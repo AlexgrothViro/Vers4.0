@@ -19,7 +19,10 @@ body {
   justify-content: space-between;
   gap: 2rem;
   padding: 2.5rem 6vw 1.5rem;
-  background: linear-gradient(120deg, #0f3d5e, #1f6aa5);
+  background: linear-gradient(120deg, rgba(15, 61, 94, 0.85), rgba(31, 106, 165, 0.85)), url("/hero-bg.png");
+  background-size: cover;
+  background-position: right center;
+  background-repeat: no-repeat;
   color: #fff;
   flex-wrap: wrap;
 }
@@ -39,6 +42,30 @@ body {
 .subtitle {
   margin: 0;
   max-width: 520px;
+}
+
+.hero__content {
+  background: rgba(15, 31, 40, 0.75);
+  padding: 1.5rem 2rem;
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
+  flex: 1;
+  min-width: 300px;
+}
+
+.hero__logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 180px;
+  max-width: 280px;
+}
+
+.hero__logo img {
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
+  border-radius: 8px;
 }
 
 .hero__card {
@@ -282,6 +309,20 @@ footer {
 @media (max-width: 640px) {
   .hero {
     padding: 2rem 6vw 1rem;
+    flex-direction: column;
+  }
+
+  .hero__content {
+    padding: 1.2rem 1.5rem;
+  }
+
+  .hero h1 {
+    font-size: 1.5rem;
+  }
+
+  .hero__logo {
+    max-width: 200px;
+    align-self: center;
   }
 
   .checkbox {
