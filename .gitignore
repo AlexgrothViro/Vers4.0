@@ -50,3 +50,10 @@ config.env
 
 # bundle env (local)
 .bundle/
+
+# =========================
+# Editor / IDE (comum)
+# =========================
+.env
+.vscode/
+.idea/
