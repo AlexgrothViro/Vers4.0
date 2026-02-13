@@ -1,20 +1,17 @@
-# =========================
-# Outputs / dados locais
-# =========================
-
-# Pastas de pipeline (geradas)
+# Ignorar artefatos locais e saídas geradas
+.bundle/
+logs/
 data/
 results/
-logs/
-tmp/
-dist/
-
-# Índices / bancos gerados localmente
 blastdb/
 bowtie2/
 
 # DBs locais (se você quiser versionar "db/" no futuro, remova esta linha)
 db/
+
+# Temporários
+tmp/
+dist/
 
 # =========================
 # Bioinfo artefacts
@@ -33,8 +30,6 @@ db/
 # =========================
 # Temporários / backups
 # =========================
-__pycache__/
-*.pyc
 *.log
 *.swp
 *.tmp
@@ -48,12 +43,9 @@ __pycache__/
 # =========================
 config.env
 
-# bundle env (local)
-.bundle/
-
-# =========================
-# Editor / IDE (comum)
-# =========================
+# Entradas comuns
+__pycache__/
+*.pyc
 .env
 .vscode/
 .idea/

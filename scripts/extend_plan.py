@@ -1,21 +1,25 @@
-import os
 #!/usr/bin/env python3
-import sys, csv
+import os
+import sys
+import csv
+import argparse
 
-REPORT = "run_T1/work/ptv_report.tsv"
-REF_FA = os.environ.get("REF_FA") or os.environ.get("REF_FASTA") or f"data/ref/{os.environ.get("DB","ptv")}.fa"
-OUT_TSV = "run_T1/work/extend_plan.tsv"
+REPORT_DEFAULT = "run_T1/work/ptv_report.tsv"
+OUT_TSV_DEFAULT = "run_T1/work/extend_plan.tsv"
 
-# parâmetros de janela de extensão (pode ajustar depois)
-FLANK_MIN = 60     # tamanho mínimo desejado por lado
-FLANK_MAX = 150    # tamanho máximo desejado por lado
+def resolve_ref_fa(env_ref=None):
+    if env_ref:
+        return env_ref
+    ref_env = os.environ.get("REF_FA") or os.environ.get("REF_FASTA")
+    if ref_env:
+        return ref_env
+    return f"data/ref/{os.environ.get('DB','ptv')}.fa"
 
-# Carrega referências em memória
 def read_fasta(path):
     seqs = {}
     cur_id = None
     cur = []
-    with open(path) as fh:
+    with open(path, "r") as fh:
         for line in fh:
             line = line.strip()
             if not line:
@@ -31,64 +35,69 @@ def read_fasta(path):
             seqs[cur_id] = "".join(cur)
     return seqs
 
-ref = read_fasta(REF_FA)
-ref_len = {k: len(v) for k,v in ref.items()}
+def main():
+    ap = argparse.ArgumentParser(description="Gerar plano de extensão para hits PTV")
+    ap.add_argument("--report", default=REPORT_DEFAULT)
+    ap.add_argument("--ref", default=None, help="FASTA de referência ou via REF_FA/REF_FASTA env")
+    ap.add_argument("--out", default=OUT_TSV_DEFAULT)
+    args = ap.parse_args()
 
-# Le o report e calcula plano
-rows = []
-with open(REPORT, newline="") as fh:
-    r = csv.DictReader(fh, delimiter="\t")
-    for d in r:
-        label = d.get("label","")
-        if label not in ("PASS","SHORT_PASS"):
-            # só planeja extensão para aprovados (ajuste se quiser incluir REVIEW)
-            continue
+    report = args.report
+    ref_fa = resolve_ref_fa(args.ref)
+    out_tsv = args.out
 
-        qid = d["qseqid"]
-        sid = d["sseqid"]
-        L   = int(float(d["length"]))
-        qstart = int(d["qstart"])
-        qend   = int(d["qend"])
-        sstart = int(d["sstart"])
-        send   = int(d["send"])
+    if not os.path.exists(report):
+        raise SystemExit(f"[ERRO] Report não encontrado: {report}")
+    if not os.path.exists(ref_fa):
+        raise SystemExit(f"[ERRO] Referência não encontrada: {ref_fa}")
 
-        if sid not in ref_len:
-            # referência não encontrada (inconsistência)
-            strand = "?"
-            Lref = 0
-            left_gap = right_gap = 0
-            rows.append([qid, sid, strand, L, Lref, sstart, send, left_gap, right_gap, 0,0, "REF_NOT_FOUND"])
-            continue
+    FLANK_MIN = 60
+    FLANK_MAX = 150
 
-        Lref = ref_len[sid]
-        strand = "+" if send >= sstart else "-"  # BLAST coords
+    ref = read_fasta(ref_fa)
+    ref_len = {k: len(v) for k, v in ref.items()}
 
-        # normaliza intervalos no sentido 5'->3' da referência
-        sL = min(sstart, send)
-        sR = max(sstart, send)
+    rows = []
+    with open(report, newline="") as fh:
+        r = csv.DictReader(fh, delimiter="\t")
+        for d in r:
+            label = d.get("label", "")
+            if label not in ("PASS", "SHORT_PASS"):
+                continue
+            qid = d["qseqid"]
+            sid = d["sseqid"]
+            L = int(float(d["length"]))
+            qstart = int(d["qstart"])
+            qend = int(d["qend"])
+            sstart = int(d["sstart"])
+            send = int(d["send"])
 
-        # lacunas até as extremidades da referência
-        left_gap  = sL - 1            # bases disponíveis à esquerda (antes de sL)
-        right_gap = Lref - sR         # bases disponíveis à direita (depois de sR)
+            if sid not in ref_len:
+                strand = "?"
+                Lref = 0
+                left_gap = right_gap = 0
+                rows.append([qid, sid, strand, L, Lref, sstart, send, left_gap, right_gap, 0, 0, "REF_NOT_FOUND"])
+                continue
 
-        # tamanhos desejados de flanco
-        left_w  = min(max(FLANK_MIN, 0), min(FLANK_MAX, left_gap))
-        right_w = min(max(FLANK_MIN, 0), min(FLANK_MAX, right_gap))
+            Lref = ref_len[sid]
+            strand = "+" if send >= sstart else "-"
+            sL = min(sstart, send)
+            sR = max(sstart, send)
+            left_gap = sL - 1
+            right_gap = Lref - sR
+            left_w = min(max(FLANK_MIN, 0), min(FLANK_MAX, left_gap))
+            right_w = min(max(FLANK_MIN, 0), min(FLANK_MAX, right_gap))
+            status = []
+            status.append("HAS_LEFT" if left_w > 0 else "NO_LEFT")
+            status.append("HAS_RIGHT" if right_w > 0 else "NO_RIGHT")
+            rows.append([qid, sid, strand, L, Lref, sstart, send, left_gap, right_gap, left_w, right_w, ";".join(status)])
 
-        # status (se tem material para estender)
-        status = []
-        status.append("HAS_LEFT" if left_w  > 0 else "NO_LEFT")
-        status.append("HAS_RIGHT" if right_w > 0 else "NO_RIGHT")
+    with open(out_tsv, "w", newline="") as outfh:
+        writer = csv.writer(outfh, delimiter="\t")
+        writer.writerow(["qseqid", "sseqid", "strand", "length", "ref_len", "sstart", "send", "left_gap", "right_gap", "left_w", "right_w", "status"])
+        writer.writerows(rows)
 
-        rows.append([qid, sid, strand, L, Lref, sstart, send,
-                     left_gap, right_gap, left_w, right_w, ",".join(status)])
+    print(f"[OK] Plano escrito em: {out_tsv}")
 
-# escreve plano
-with open(OUT_TSV, "w", newline="") as out:
-    w = csv.writer(out, delimiter="\t")
-    w.writerow(["qseqid","sseqid","strand","aln_len","ref_len","sstart","send",
-                "left_gap","right_gap","left_w","right_w","status"])
-    for r in rows:
-        w.writerow(r)
-
-print("[OK] extend_plan.tsv")
+if __name__ == "__main__":
+    main()
