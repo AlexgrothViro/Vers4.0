@@ -379,3 +379,21 @@ footer {
   overflow-y: auto;
   white-space: pre-wrap;
 }
+
+.db-status {
+  margin-top: 0.6rem;
+  padding: 0.5rem 0.8rem;
+  border-radius: 8px;
+  background: #f0f3f8;
+  border: 1px solid #d1dae8;
+  color: #5a6172;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.db-status.active {
+  background: #e8f4f8;
+  border-color: #1f6aa5;
+  color: #1f6aa5;
+}
+
