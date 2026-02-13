@@ -477,6 +477,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return serve_file(self, DASHBOARD_DIR / "styles.css", "text/css; charset=utf-8")
         if parsed.path == "/app.js":
             return serve_file(self, DASHBOARD_DIR / "app.js", "application/javascript; charset=utf-8")
+        if parsed.path == "/hero-bg.png":
+            return serve_file(self, DASHBOARD_DIR / "hero-bg.png", "image/png")
+        if parsed.path == "/feevale-logo.png":
+            return serve_file(self, DASHBOARD_DIR / "feevale-logo.png", "image/png")
         if parsed.path == "/api/samples":
             return json_response(self, HTTPStatus.OK, {"samples": list_samples()})
         if parsed.path == "/api/targets":
