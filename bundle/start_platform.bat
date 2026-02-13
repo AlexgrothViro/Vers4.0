@@ -24,11 +24,12 @@ rem distro WSL (pode ser sobrescrita por variavel de ambiente)
 set "WSL_DISTRO=%WSL_DISTRO%"
 if not defined WSL_DISTRO set "WSL_DISTRO=Ubuntu"
 
-wsl.exe -l -q | findstr /i /x "%WSL_DISTRO%" >nul
+rem testar se a distro existe executando um comando simples
+wsl.exe -d "%WSL_DISTRO%" -e /bin/true >nul 2>&1
 if errorlevel 1 (
-  echo [ERRO] Distro "%WSL_DISTRO%" nao encontrada.
+  echo [ERRO] Distro "%WSL_DISTRO%" nao encontrada ou nao pode ser acessada.
   echo Distros disponiveis:
-  wsl.exe -l -q
+  wsl.exe -l -v
   exit /b 1
 )
 

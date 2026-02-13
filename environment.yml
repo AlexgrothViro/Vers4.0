@@ -12,4 +12,4 @@ dependencies:
   - fasttree
   - iqtree
   - entrez-direct
-  - python>=3.8
+  - python=3.11

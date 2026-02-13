@@ -16,6 +16,15 @@ const pipelineProgressEl = getEl("pipeline-progress");
 const reportViewerEl = getEl("report-viewer");
 const reportContentEl = getEl("report-content");
 const dbTargetEl = getEl("db-target");
+const dbStatusEl = getEl("db-status");
+
+// State to remember last selected DB
+let currentDB = {
+  target: null,
+  query: null,
+  taxid: null,
+  ncbi_db: null
+};
 
 // Early abort if essential elements are missing
 if (!statusEl || !outputEl || !finalStatusEl) {
@@ -33,6 +42,21 @@ const stageIcon = { pending: "⏳", running: "🔄", done: "✅", error: "❌", 
 const setStatus = (status, action) => {
   if (statusEl) statusEl.textContent = status;
   if (action && actionEl) actionEl.textContent = action;
+};
+
+const updateDBStatus = () => {
+  if (!dbStatusEl) return;
+  if (currentDB.target) {
+    const displayText = currentDB.target === "ptv" ? "Teschovirus A (PTV)" :
+                       currentDB.target === "psv" ? "Sapelovirus A" :
+                       currentDB.target === "evg" ? "Enterovirus G" :
+                       currentDB.target;
+    dbStatusEl.textContent = `DB ativo: ${displayText}`;
+    dbStatusEl.className = "db-status active";
+  } else {
+    dbStatusEl.textContent = "DB: nenhum selecionado";
+    dbStatusEl.className = "db-status";
+  }
 };
 
 const setOutput = (text) => {
@@ -288,11 +312,25 @@ const bindButtons = () => {
   document.getElementById("db-form").addEventListener("submit", (event) => {
     event.preventDefault();
     const formData = new FormData(event.target);
+    const target = formData.get("target");
+    const query = formData.get("query");
+    const taxid = formData.get("taxid");
+    
+    // Remember the selected DB configuration
+    currentDB = {
+      target: target,
+      query: query,
+      taxid: taxid,
+      ncbi_db: null
+    };
+    
     runAction("build_db", {
-      target: formData.get("target"),
-      query: formData.get("query"),
-      taxid: formData.get("taxid"),
+      target: target,
+      query: query,
+      taxid: taxid,
     });
+    
+    updateDBStatus();
   });
 
   document.getElementById("import-form").addEventListener("submit", (event) => {
@@ -314,11 +352,24 @@ const bindButtons = () => {
   document.getElementById("pipeline-form").addEventListener("submit", (event) => {
     event.preventDefault();
     const formData = new FormData(event.target);
-    runAction("pipeline", {
+    const params = {
       sample: formData.get("sample_select") || formData.get("sample"),
       assembler: formData.get("assembler"),
       kmer: formData.get("kmer"),
-    });
+    };
+    
+    // Include DB configuration if one was selected
+    if (currentDB.target) {
+      params.db = currentDB.target;
+      if (currentDB.query) {
+        params.db_query = currentDB.query;
+      }
+      if (currentDB.ncbi_db) {
+        params.ncbi_db = currentDB.ncbi_db;
+      }
+    }
+    
+    runAction("pipeline", params);
   });
 
   document.querySelectorAll(".tab").forEach((tab) => {
@@ -339,4 +390,5 @@ window.addEventListener("load", () => {
   fetchHistory();
   showPipelineProgress(false);
   setReportContent("");
+  updateDBStatus();
 });
