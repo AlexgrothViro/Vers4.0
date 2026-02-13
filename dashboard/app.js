@@ -50,6 +50,9 @@ const updateDBStatus = () => {
     const displayText = currentDB.target === "ptv" ? "Teschovirus A (PTV)" :
                        currentDB.target === "psv" ? "Sapelovirus A" :
                        currentDB.target === "evg" ? "Enterovirus G" :
+                       currentDB.target === "teschovirus_a" ? "Teschovirus A (PTV)" :
+                       currentDB.target === "sapelovirus_a" ? "Sapelovirus A" :
+                       currentDB.target === "enterovirus_g" ? "Enterovirus G" :
                        currentDB.target;
     dbStatusEl.textContent = `DB ativo: ${displayText}`;
     dbStatusEl.className = "db-status active";
