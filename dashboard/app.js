@@ -17,6 +17,13 @@ const reportViewerEl = getEl("report-viewer");
 const reportContentEl = getEl("report-content");
 const dbTargetEl = getEl("db-target");
 const dbStatusEl = getEl("db-status");
+const configFormEl = getEl("config-form");
+const configStatusEl = getEl("config-status");
+const rebuildEnvBtnEl = getEl("rebuild-env-btn");
+const rebuildStatusEl = getEl("rebuild-status");
+const envFileStatusEl = getEl("env-file-status");
+const envMtimeEl = getEl("env-mtime");
+const envPathEl = getEl("env-path");
 
 // State to remember last selected DB
 let currentDB = {
@@ -234,6 +241,147 @@ const fetchHistory = async () => {
   }
 };
 
+const loadEnvironmentStatus = async () => {
+  try {
+    const response = await fetch("/api/config/environment");
+    if (!response.ok) {
+      if (envFileStatusEl) envFileStatusEl.textContent = "Erro ao carregar";
+      return;
+    }
+    const data = await response.json();
+    
+    if (envFileStatusEl) {
+      envFileStatusEl.textContent = data.has_environment_yml ? "Encontrado ✅" : "Não encontrado ❌";
+    }
+    if (envMtimeEl) {
+      envMtimeEl.textContent = data.environment_yml_mtime ? data.environment_yml_mtime.replace("T", " ") : "N/A";
+    }
+    if (envPathEl) {
+      envPathEl.textContent = data.environment_yml_path || "N/A";
+    }
+  } catch (err) {
+    console.error("Falha ao carregar status do ambiente", err);
+    if (envFileStatusEl) envFileStatusEl.textContent = "Erro ao carregar";
+  }
+};
+
+const loadConfigEnv = async () => {
+  if (!configFormEl) return;
+  
+  try {
+    const response = await fetch("/api/config/env");
+    if (!response.ok) {
+      console.error("Falha ao carregar configuração");
+      return;
+    }
+    const data = await response.json();
+    const config = data.config || {};
+    
+    // Populate form fields
+    Object.keys(config).forEach((key) => {
+      const input = configFormEl.querySelector(`[name="${key}"]`);
+      if (input) {
+        input.value = config[key] || "";
+      }
+    });
+  } catch (err) {
+    console.error("Falha ao carregar configuração", err);
+  }
+};
+
+const saveConfigEnv = async (event) => {
+  event.preventDefault();
+  if (!configFormEl || !configStatusEl) return;
+  
+  const formData = new FormData(configFormEl);
+  const config = {};
+  
+  // Collect non-empty values
+  for (const [key, value] of formData.entries()) {
+    if (key !== "submit" && value.trim()) {
+      config[key] = value.trim();
+    }
+  }
+  
+  try {
+    const response = await fetch("/api/config/env", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ config }),
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok && result.success) {
+      configStatusEl.className = "final-status ok";
+      configStatusEl.innerHTML = `<strong>SUCESSO</strong> ✅ ${result.message}`;
+    } else {
+      configStatusEl.className = "final-status error";
+      configStatusEl.innerHTML = `<strong>ERRO</strong> ❌ ${result.error || "Falha ao salvar configuração"}`;
+    }
+  } catch (err) {
+    configStatusEl.className = "final-status error";
+    configStatusEl.innerHTML = `<strong>ERRO</strong> ❌ ${err.message}`;
+  }
+};
+
+const rebuildEnvironment = async () => {
+  if (!rebuildEnvBtnEl || !rebuildStatusEl) return;
+  
+  rebuildStatusEl.className = "final-status";
+  rebuildStatusEl.innerHTML = "";
+  
+  try {
+    const response = await fetch("/api/config/environment/rebuild", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    
+    if (!response.ok) {
+      const result = await response.json();
+      rebuildStatusEl.className = "final-status error";
+      rebuildStatusEl.innerHTML = `<strong>ERRO</strong> ❌ ${result.error || "Falha ao iniciar recriação"}`;
+      return;
+    }
+    
+    const { job_id: jobId } = await response.json();
+    rebuildStatusEl.className = "final-status ok";
+    rebuildStatusEl.innerHTML = "<strong>Recriando ambiente...</strong> ⏳ Aguarde a conclusão.";
+    
+    // Poll the job
+    const interval = setInterval(async () => {
+      const jobResponse = await fetch(`/api/job/${jobId}`);
+      if (!jobResponse.ok) {
+        clearInterval(interval);
+        rebuildStatusEl.className = "final-status error";
+        rebuildStatusEl.innerHTML = "<strong>ERRO</strong> ❌ Falha ao consultar status do job";
+        return;
+      }
+      
+      const jobData = await jobResponse.json();
+      
+      if (jobData.status === "running" || jobData.status === "queued") {
+        return;
+      }
+      
+      clearInterval(interval);
+      
+      if (jobData.status === "done") {
+        rebuildStatusEl.className = "final-status ok";
+        rebuildStatusEl.innerHTML = "<strong>SUCESSO</strong> ✅ Ambiente recriado com sucesso";
+        loadEnvironmentStatus();
+      } else {
+        rebuildStatusEl.className = "final-status error";
+        rebuildStatusEl.innerHTML = `<strong>ERRO</strong> ❌<pre>${jobData.tail || "Falha ao recriar ambiente"}</pre>`;
+      }
+    }, 1200);
+  } catch (err) {
+    rebuildStatusEl.className = "final-status error";
+    rebuildStatusEl.innerHTML = `<strong>ERRO</strong> ❌ ${err.message}`;
+  }
+};
+
 const runAction = async (action, params = {}) => {
   setStatus("Executando...", action);
   setOutput("");
@@ -382,8 +530,22 @@ const bindButtons = () => {
       tab.classList.add("active");
       document.getElementById(tab.dataset.tab).classList.add("active");
       if (tab.dataset.tab === "tab-historico") fetchHistory();
+      if (tab.dataset.tab === "tab-configuracao") {
+        loadEnvironmentStatus();
+        loadConfigEnv();
+      }
     });
   });
+
+  // Bind config form
+  if (configFormEl) {
+    configFormEl.addEventListener("submit", saveConfigEnv);
+  }
+  
+  // Bind rebuild environment button
+  if (rebuildEnvBtnEl) {
+    rebuildEnvBtnEl.addEventListener("click", rebuildEnvironment);
+  }
 };
 
 window.addEventListener("load", () => {
