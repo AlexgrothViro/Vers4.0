@@ -39,7 +39,7 @@ def main():
     outdir.mkdir(parents=True, exist_ok=True)
 
     seq = read_first_fasta_seq(ref)
-    if len(seq) < args.insert + 10:
+    if len(seq) < args.insert:
         raise SystemExit("[ERRO] Referência curta demais para o insert atual.")
     if args.read_len > args.insert:
         raise SystemExit("[ERRO] read_len maior que insert; ajuste --len ou --insert.")

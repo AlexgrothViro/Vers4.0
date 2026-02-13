@@ -1,5 +1,5 @@
 @echo off
-setlocal EnableDelayedExpansion
+setlocal EnableDelayedExpansion EnableExtensions
 
 rem -------------------------
 rem bundle/start_platform.bat - robust launcher WSL/Windows
