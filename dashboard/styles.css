@@ -15,13 +15,41 @@ body {
 }
 
 .hero {
+  position: relative;
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 2rem;
   padding: 2.5rem 6vw 1.5rem;
-  background: linear-gradient(120deg, #0f3d5e, #1f6aa5);
+  background: linear-gradient(120deg, rgba(15, 61, 94, 0.85), rgba(31, 106, 165, 0.85)), 
+              url('/hero-bg.png') center/cover no-repeat;
   color: #fff;
   flex-wrap: wrap;
+  min-height: 200px;
+}
+
+.hero__content {
+  flex: 1;
+  min-width: 300px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1.5rem 2rem;
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.hero__logo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  min-width: 180px;
+}
+
+.hero__logo img {
+  max-width: 200px;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.2));
 }
 
 .hero h1 {
@@ -282,6 +310,22 @@ footer {
 @media (max-width: 640px) {
   .hero {
     padding: 2rem 6vw 1rem;
+    min-height: auto;
+  }
+
+  .hero__content {
+    min-width: 100%;
+    padding: 1rem 1.5rem;
+  }
+
+  .hero__logo {
+    width: 100%;
+    justify-content: center;
+    min-width: 100%;
+  }
+
+  .hero__logo img {
+    max-width: 150px;
   }
 
   .checkbox {
