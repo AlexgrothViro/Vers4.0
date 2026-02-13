@@ -42,6 +42,7 @@ dist/
 # Config local (não versionar)
 # =========================
 config.env
+config/picornavirus.env
 
 # Entradas comuns
 __pycache__/

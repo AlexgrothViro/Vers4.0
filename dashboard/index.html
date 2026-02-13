@@ -21,6 +21,7 @@
     <main>
       <div class="tabs">
         <button class="tab active" data-tab="tab-execucao">Execução</button>
+        <button class="tab" data-tab="tab-configuracao">Configuração</button>
         <button class="tab" data-tab="tab-historico">Histórico</button>
       </div>
 
@@ -140,6 +141,67 @@
             <h3>Resumo do resultado</h3>
             <pre id="report-content" class="report-content"></pre>
           </div>
+        </section>
+      </section>
+
+      <section id="tab-configuracao" class="tab-panel">
+        <section class="card">
+          <div class="card__header">
+            <h2>Status do ambiente (environment.yml)</h2>
+            <p>Informações sobre o ambiente Conda/micromamba do projeto.</p>
+          </div>
+          <div id="env-status" class="status">
+            <div><span class="status__label">Arquivo</span><strong id="env-file-status">Carregando...</strong></div>
+            <div><span class="status__label">Última modificação</span><strong id="env-mtime">-</strong></div>
+            <div><span class="status__label">Caminho</span><strong id="env-path">-</strong></div>
+          </div>
+          <button class="primary" id="rebuild-env-btn">Recriar ambiente</button>
+          <div id="rebuild-status" class="final-status"></div>
+        </section>
+
+        <section class="card">
+          <div class="card__header">
+            <h2>Configuração do pipeline</h2>
+            <p>Edite as variáveis de configuração do arquivo <code>config/picornavirus.env</code>.</p>
+          </div>
+          <form id="config-form" class="form-grid">
+            <label>ASSEMBLER
+              <select name="ASSEMBLER">
+                <option value="">Não definido</option>
+                <option value="velvet">velvet</option>
+                <option value="spades">spades</option>
+              </select>
+            </label>
+            <label>VELVET_K
+              <input name="VELVET_K" type="number" placeholder="Ex: 31" />
+            </label>
+            <label>THREADS
+              <input name="THREADS" type="number" placeholder="Ex: 4" />
+            </label>
+            <label>DB
+              <input name="DB" placeholder="Ex: ptv" />
+            </label>
+            <label>RAW_DIR
+              <input name="RAW_DIR" placeholder="Ex: data/raw" />
+            </label>
+            <label>BLAST_DB
+              <input name="BLAST_DB" placeholder="Ex: blastdb/ptv" />
+            </label>
+            <label>HOST_REMOVED_DIR
+              <input name="HOST_REMOVED_DIR" placeholder="Ex: data/host_removed" />
+            </label>
+            <label>HOST_INDEX_PREFIX
+              <input name="HOST_INDEX_PREFIX" placeholder="Ex: bowtie2/host" />
+            </label>
+            <label>SAMPLE_NAME
+              <input name="SAMPLE_NAME" placeholder="Ex: amostra_teste" />
+            </label>
+            <label>SAMPLE_ID
+              <input name="SAMPLE_ID" placeholder="Ex: amostra_teste" />
+            </label>
+            <button class="primary" type="submit">Salvar configuração</button>
+          </form>
+          <div id="config-status" class="final-status"></div>
         </section>
       </section>
 

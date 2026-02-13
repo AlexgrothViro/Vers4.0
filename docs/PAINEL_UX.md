@@ -32,6 +32,17 @@ bundle\start_platform.bat
   - padronização em `data/raw/<sample>_R1.fastq.gz` e `_R2.fastq.gz`.
 - **Execução do pipeline por sample_id** (sem digitar path completo).
 - **Histórico e logs** com artefatos de execução.
+- **Configuração** (nova aba):
+  - **Status do ambiente (environment.yml)**:
+    - mostra se o arquivo existe,
+    - data/hora da última modificação,
+    - caminho do arquivo,
+    - botão "Recriar ambiente" que executa `bundle/install_wsl.sh` em background.
+  - **Configuração do pipeline**:
+    - edição das variáveis de `config/picornavirus.env`,
+    - campos suportados: `ASSEMBLER`, `VELVET_K`, `THREADS`, `DB`, `RAW_DIR`, `BLAST_DB`, `HOST_REMOVED_DIR`, `HOST_INDEX_PREFIX`, `SAMPLE_NAME`, `SAMPLE_ID`,
+    - backup automático antes de salvar,
+    - mensagens de sucesso/erro em português.
 
 ## Validações e mensagens amigáveis
 

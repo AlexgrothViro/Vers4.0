@@ -20,8 +20,19 @@ DASHBOARD_DIR = REPO_ROOT / "dashboard"
 LOG_DIR = REPO_ROOT / "logs"
 RUNS_DIR = REPO_ROOT / "results" / "runs"
 TARGETS_FILE = REPO_ROOT / "config" / "targets.json"
+CONFIG_ENV_PRIMARY = REPO_ROOT / "config" / "picornavirus.env"
+CONFIG_ENV_LEGACY = REPO_ROOT / "config.env"
+ENVIRONMENT_YML = REPO_ROOT / "environment.yml"
+INSTALL_WSL_SCRIPT = REPO_ROOT / "bundle" / "install_wsl.sh"
 
 MAX_OUTPUT_LINES = 4000
+
+# Supported configuration keys for env file
+SUPPORTED_ENV_KEYS = [
+    "ASSEMBLER", "VELVET_K", "THREADS", "DB", "RAW_DIR",
+    "BLAST_DB", "HOST_REMOVED_DIR", "HOST_INDEX_PREFIX",
+    "SAMPLE_NAME", "SAMPLE_ID"
+]
 
 jobs = {}
 jobs_lock = threading.Lock()
@@ -69,6 +80,144 @@ def list_db_profiles():
         return data if isinstance(data, list) else []
     except Exception:
         return []
+
+
+def get_config_env_path():
+    """Return the path to the config env file to use (prefer picornavirus.env over config.env)"""
+    if CONFIG_ENV_PRIMARY.exists():
+        return CONFIG_ENV_PRIMARY
+    elif CONFIG_ENV_LEGACY.exists():
+        return CONFIG_ENV_LEGACY
+    # If neither exists, we'll create the primary one
+    return CONFIG_ENV_PRIMARY
+
+
+def parse_env_file(filepath):
+    """Parse a simple KEY=VALUE env file, ignoring comments and blank lines"""
+    config = {}
+    if not filepath.exists():
+        return config
+    
+    try:
+        content = filepath.read_text(encoding="utf-8")
+        for line in content.splitlines():
+            line = line.strip()
+            # Skip comments and blank lines
+            if not line or line.startswith("#"):
+                continue
+            # Handle key=value format
+            if "=" in line:
+                key, _, value = line.partition("=")
+                key = key.strip()
+                value = value.strip()
+                # Remove quotes if present
+                if value.startswith('"') and value.endswith('"'):
+                    value = value[1:-1]
+                elif value.startswith("'") and value.endswith("'"):
+                    value = value[1:-1]
+                # Handle bash default syntax: : "${KEY:=value}"
+                if value.startswith(": \"${") and value.endswith("}\""):
+                    # Extract default value from : "${KEY:=value}"
+                    match = re.match(r':\s*"\$\{[^:}]+:=([^}]*)\}"', value)
+                    if match:
+                        value = match.group(1).strip('"').strip("'")
+                config[key] = value
+    except Exception as e:
+        print(f"[WARN] Error parsing env file {filepath}: {e}")
+    
+    return config
+
+
+def load_config_env():
+    """Load configuration from picornavirus.env (or config.env as fallback)"""
+    env_path = get_config_env_path()
+    config = parse_env_file(env_path)
+    
+    # Return only supported keys
+    result = {}
+    for key in SUPPORTED_ENV_KEYS:
+        if key in config:
+            result[key] = config[key]
+    
+    return result
+
+
+def save_config_env(updates):
+    """
+    Update config/picornavirus.env with new values.
+    - Backs up the file first
+    - Preserves unknown keys
+    - Updates known keys
+    - Adds missing known keys at the end
+    """
+    env_path = CONFIG_ENV_PRIMARY
+    
+    # Create config directory if it doesn't exist
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Backup existing file if it exists
+    if env_path.exists():
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = env_path.parent / f"{env_path.name}.bak-{timestamp}"
+        shutil.copy2(env_path, backup_path)
+    
+    # Read existing content or start fresh
+    existing_lines = []
+    existing_keys = set()
+    
+    BASH_VAR_PREFIX = ": \"${"
+    BASH_VAR_PREFIX_LEN = len(BASH_VAR_PREFIX)
+    
+    if env_path.exists():
+        content = env_path.read_text(encoding="utf-8")
+        for line in content.splitlines():
+            stripped = line.strip()
+            # Track keys we've seen
+            if stripped and not stripped.startswith("#") and "=" in stripped:
+                key = stripped.split("=")[0].strip()
+                # Remove bash syntax if present
+                if key.startswith(BASH_VAR_PREFIX):
+                    key = key[BASH_VAR_PREFIX_LEN:].split(":")[0]
+                existing_keys.add(key)
+                
+                # Update line if this key is being updated
+                if key in updates:
+                    # Simple format: KEY=value
+                    line = f'{key}="{updates[key]}"'
+            
+            existing_lines.append(line)
+    
+    # Add new keys that weren't in the file
+    for key in SUPPORTED_ENV_KEYS:
+        if key in updates and key not in existing_keys:
+            existing_lines.append(f'{key}="{updates[key]}"')
+    
+    # Write updated content
+    env_path.write_text("\n".join(existing_lines) + "\n", encoding="utf-8")
+
+
+def get_environment_status():
+    """Get status information about environment.yml"""
+    status = {
+        "has_environment_yml": ENVIRONMENT_YML.exists(),
+        "environment_yml_path": str(ENVIRONMENT_YML.relative_to(REPO_ROOT)),
+        "environment_yml_mtime": None,
+    }
+    
+    if ENVIRONMENT_YML.exists():
+        mtime = ENVIRONMENT_YML.stat().st_mtime
+        status["environment_yml_mtime"] = iso_now(mtime)
+    
+    # Try to detect bundle paths if they exist
+    bundle_dir = REPO_ROOT / ".bundle"
+    if bundle_dir.exists():
+        status["micromamba_root"] = str((bundle_dir / "mamba").relative_to(REPO_ROOT)) if (bundle_dir / "mamba").exists() else None
+        status["env_dir"] = str((bundle_dir / "env").relative_to(REPO_ROOT)) if (bundle_dir / "env").exists() else None
+    else:
+        status["micromamba_root"] = None
+        status["env_dir"] = None
+    
+    return status
 
 
 def validate_fastq_name(name):
@@ -189,6 +338,9 @@ def build_command(action, params):
 
     if action == "demo":
         return ["make", "demo"], {}
+
+    if action == "rebuild_env":
+        return ["bash", str(INSTALL_WSL_SCRIPT.relative_to(REPO_ROOT))], {}
 
     if action == "import_sample":
         sample = params.get("sample")
@@ -493,6 +645,18 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return json_response(self, HTTPStatus.OK, {"targets": list_targets()})
         if parsed.path == "/api/history":
             return json_response(self, HTTPStatus.OK, {"runs": list_run_history()})
+        if parsed.path == "/api/config/env":
+            try:
+                config = load_config_env()
+                return json_response(self, HTTPStatus.OK, {"config": config})
+            except Exception as exc:
+                return json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"Erro ao carregar configuração: {exc}"})
+        if parsed.path == "/api/config/environment":
+            try:
+                status = get_environment_status()
+                return json_response(self, HTTPStatus.OK, status)
+            except Exception as exc:
+                return json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"Erro ao obter status do ambiente: {exc}"})
         if parsed.path == "/api/history/file":
             query = parse_qs(parsed.query)
             target = resolve_history_file((query.get("run") or [""])[0], (query.get("type") or [""])[0])
@@ -522,6 +686,26 @@ class DashboardHandler(BaseHTTPRequestHandler):
             payload = json.loads(raw_body)
         except json.JSONDecodeError:
             return text_response(self, HTTPStatus.BAD_REQUEST, "JSON inválido")
+
+        if parsed.path == "/api/config/env":
+            try:
+                updates = payload.get("config", {})
+                # Validate that only supported keys are being updated
+                for key in updates:
+                    if key not in SUPPORTED_ENV_KEYS:
+                        return json_response(self, HTTPStatus.BAD_REQUEST, {"error": f"Chave não suportada: {key}", "success": False})
+                
+                save_config_env(updates)
+                return json_response(self, HTTPStatus.OK, {"success": True, "message": "Configuração atualizada com sucesso"})
+            except Exception as exc:
+                return json_response(self, HTTPStatus.INTERNAL_SERVER_ERROR, {"error": f"Erro ao salvar configuração: {exc}", "success": False})
+        
+        if parsed.path == "/api/config/environment/rebuild":
+            # Trigger bundle/install_wsl.sh as a background job
+            if not INSTALL_WSL_SCRIPT.exists():
+                return json_response(self, HTTPStatus.NOT_FOUND, {"error": "Script bundle/install_wsl.sh não encontrado", "success": False})
+            
+            return self.start_job("rebuild_env", {})
 
         if parsed.path == "/api/history/rerun":
             run_json = RUNS_DIR / str(payload.get("run_dir")) / "run.json"
@@ -557,7 +741,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         return json_response(self, HTTPStatus.OK, {"message": f"Amostra importada: {sample}"})
 
     def start_job(self, action, params):
-        if action not in {"check_env", "demo", "import_sample", "build_db", "pipeline"}:
+        if action not in {"check_env", "demo", "import_sample", "build_db", "pipeline", "rebuild_env"}:
             return text_response(self, HTTPStatus.BAD_REQUEST, "Ação inválida")
         job_id = uuid.uuid4().hex
         with jobs_lock:
