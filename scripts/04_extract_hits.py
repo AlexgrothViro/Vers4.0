@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import argparse, os, sys, statistics as st
-import os
 from collections import defaultdict
 
 def read_fasta(path):

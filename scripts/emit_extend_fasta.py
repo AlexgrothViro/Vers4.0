@@ -1,5 +1,5 @@
-import os
 #!/usr/bin/env python3
+import os
 import sys, csv
 
 PLAN   = "run_T1/work/extend_plan.tsv"
