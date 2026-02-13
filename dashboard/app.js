@@ -1,14 +1,26 @@
-const statusEl = document.getElementById("job-status");
-const actionEl = document.getElementById("job-action");
-const outputEl = document.getElementById("job-output");
-const samplesDatalist = document.getElementById("samples");
-const sampleSelectEl = document.getElementById("sample-select");
-const finalStatusEl = document.getElementById("final-status");
-const historyListEl = document.getElementById("history-list");
-const pipelineProgressEl = document.getElementById("pipeline-progress");
-const reportViewerEl = document.getElementById("report-viewer");
-const reportContentEl = document.getElementById("report-content");
-const dbTargetEl = document.getElementById("db-target");
+// Defensive element guards - get elements safely
+const getEl = (id) => {
+  const el = document.getElementById(id);
+  if (!el) console.warn(`Missing element: ${id}`);
+  return el;
+};
+
+const statusEl = getEl("job-status");
+const actionEl = getEl("job-action");
+const outputEl = getEl("job-output");
+const samplesDatalist = getEl("samples");
+const sampleSelectEl = getEl("sample-select");
+const finalStatusEl = getEl("final-status");
+const historyListEl = getEl("history-list");
+const pipelineProgressEl = getEl("pipeline-progress");
+const reportViewerEl = getEl("report-viewer");
+const reportContentEl = getEl("report-content");
+const dbTargetEl = getEl("db-target");
+
+// Early abort if essential elements are missing
+if (!statusEl || !outputEl || !finalStatusEl) {
+  console.error("Critical UI elements missing. Dashboard cannot initialize.");
+}
 
 const stageConfig = {
   host: { marker: "[3/6]", label: "Remoção de hospedeiro" },
@@ -19,26 +31,30 @@ const stageConfig = {
 const stageIcon = { pending: "⏳", running: "🔄", done: "✅", error: "❌", skipped: "⏭️" };
 
 const setStatus = (status, action) => {
-  statusEl.textContent = status;
-  if (action) actionEl.textContent = action;
+  if (statusEl) statusEl.textContent = status;
+  if (action && actionEl) actionEl.textContent = action;
 };
 
 const setOutput = (text) => {
+  if (!outputEl) return;
   outputEl.textContent = text || "";
   outputEl.scrollTop = outputEl.scrollHeight;
 };
 
 const setFinalStatus = (html, tone = "") => {
+  if (!finalStatusEl) return;
   finalStatusEl.className = `final-status ${tone}`.trim();
   finalStatusEl.innerHTML = html || "";
 };
 
 const setReportContent = (content) => {
+  if (!reportContentEl || !reportViewerEl) return;
   reportContentEl.textContent = content || "";
   reportViewerEl.hidden = !content;
 };
 
 const initPipelineProgress = () => {
+  if (!pipelineProgressEl) return;
   pipelineProgressEl.querySelectorAll("li[data-stage]").forEach((item) => {
     item.dataset.state = "pending";
     item.querySelector(".stage-icon").textContent = stageIcon.pending;
@@ -46,11 +62,13 @@ const initPipelineProgress = () => {
 };
 
 const showPipelineProgress = (show) => {
+  if (!pipelineProgressEl) return;
   pipelineProgressEl.hidden = !show;
   if (show) initPipelineProgress();
 };
 
 const applyStageState = (stage, state) => {
+  if (!pipelineProgressEl) return;
   const item = pipelineProgressEl.querySelector(`li[data-stage="${stage}"]`);
   if (!item) return;
   item.dataset.state = state;
@@ -76,6 +94,7 @@ const updatePipelineProgressFromOutput = (output, jobStatus) => {
 };
 
 const fetchTargets = async () => {
+  if (!dbTargetEl) return;
   try {
     const response = await fetch("/api/targets");
     if (!response.ok) return;
@@ -97,17 +116,21 @@ const fetchSamples = async () => {
     const response = await fetch("/api/samples");
     if (!response.ok) return;
     const data = await response.json();
-    samplesDatalist.innerHTML = "";
-    sampleSelectEl.innerHTML = '<option value="">Selecione uma amostra</option>';
+    if (samplesDatalist) samplesDatalist.innerHTML = "";
+    if (sampleSelectEl) sampleSelectEl.innerHTML = '<option value="">Selecione uma amostra</option>';
     (data.samples || []).forEach((sample) => {
-      const option = document.createElement("option");
-      option.value = sample;
-      samplesDatalist.appendChild(option);
+      if (samplesDatalist) {
+        const option = document.createElement("option");
+        option.value = sample;
+        samplesDatalist.appendChild(option);
+      }
 
-      const selectOption = document.createElement("option");
-      selectOption.value = sample;
-      selectOption.textContent = sample;
-      sampleSelectEl.appendChild(selectOption);
+      if (sampleSelectEl) {
+        const selectOption = document.createElement("option");
+        selectOption.value = sample;
+        selectOption.textContent = sample;
+        sampleSelectEl.appendChild(selectOption);
+      }
     });
   } catch (err) {
     console.error("Falha ao listar amostras", err);
@@ -146,6 +169,7 @@ const rerunHistory = async (runDir) => {
 };
 
 const renderHistory = (runs) => {
+  if (!historyListEl) return;
   if (!runs.length) {
     historyListEl.innerHTML = "<p>Nenhuma execução registrada ainda.</p>";
     return;
