@@ -218,7 +218,7 @@ R1 ?=
 R2 ?=
 
 demo: ptv-fasta
-	python3 scripts/97_make_demo_fastq.py --ref "$(REF_FASTA)" --outdir data/raw --sample DEMO --pairs 2000 --len 150 --insert 300
+	python3 scripts/97_make_demo_fastq.py --ref "$(REF_FASTA)" --outdir data/raw --sample DEMO --pairs 2000 --len 150 --insert 150
 
 ux:
 	python3 scripts/ux_dashboard.py --host 0.0.0.0 --port 8000
