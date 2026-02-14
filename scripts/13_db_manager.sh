@@ -177,7 +177,9 @@ done
 if [[ $blast_missing -eq 1 ]]; then
   command -v makeblastdb >/dev/null 2>&1 || log_error "makeblastdb não encontrado (blast+)."
   log_info "Gerando BLAST DB em $BLAST_DB"
-  makeblastdb -in "$REF_FASTA" -dbtype nucl -out "$BLAST_DB"
+  # Remove taxid info from headers to prevent "taxid2offset error for tax id 0"
+  sed -i 's/|taxid|[0-9]*//g' "$REF_FASTA"
+  makeblastdb -in "$REF_FASTA" -dbtype nucl -out "$BLAST_DB" -parse_seqids
 else
   log_info "BLAST DB atualizado: $BLAST_DB"
 fi
@@ -202,6 +204,8 @@ done
 if [[ $bt2_missing -eq 1 ]]; then
   command -v bowtie2-build >/dev/null 2>&1 || log_error "bowtie2-build não encontrado."
   log_info "Gerando índice Bowtie2 em $BOWTIE2_INDEX"
+  # Remove any old or temporary index files to prevent corruption
+  rm -f "${BOWTIE2_INDEX}"*.bt2 "${BOWTIE2_INDEX}"*.bt2.tmp
   bowtie2-build "$REF_FASTA" "$BOWTIE2_INDEX"
 else
   log_info "Índice Bowtie2 atualizado: $BOWTIE2_INDEX"
